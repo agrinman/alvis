@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
+	"github.com/fatih/color"
 	IBE "github.com/vanadium/go.lib/ibe"
-	"log"
 	"strings"
 )
 
@@ -57,7 +57,7 @@ func GenCiphTokens(m IBE.Master, data string) []string {
 	filteredText := strings.Replace(data, ".", "", -1)
 	filteredText = strings.Replace(filteredText, ",", "", -1)
 	tokens := strings.Split(filteredText, " ")
-	log.Println("Plaintext Key Word Count: ", computeWordCount(tokens, sampleKeyWords))
+	fmt.Println("Plaintext Key Word Count: ", computeWordCount(tokens, sampleKeyWords))
 
 	ciphTokens := make([]string, len(tokens))
 	for i, t := range tokens {
@@ -90,17 +90,20 @@ func ExtractEncryptedKeywords(encryptedTokens []string, keywords []Keyword) {
 			}
 
 			if message[0] == 0x01 {
-				log.Println("Decrypted Keyword:", sk.Word)
+				fmt.Printf("Decrypted Keyword (%s) from Ciphertext (%s...%s)\n", color.GreenString(sk.Word), color.YellowString(v[0:5]), color.YellowString(v[len(v)-5:]))
 				foundCount[i]++
 			}
 		}
 	}
 
+	color.Cyan("Done!")
+
+	totals := ""
 	for i, k := range keywords {
-		fmt.Printf("%s: %d", k.Word, foundCount[i])
+		totals += fmt.Sprintf("%s: %d, ", k.Word, foundCount[i])
 	}
 
-	log.Println("Extracted Keywords: ", foundCount)
+	color.Green("Extracted Keywords:\n%s", totals)
 }
 
 //MARK: Helpers
