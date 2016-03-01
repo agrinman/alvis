@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/fatih/color"
 	IBE "github.com/vanadium/go.lib/ibe"
+	"runtime"
 	"strings"
 )
 
@@ -23,6 +24,8 @@ type Keyword struct {
 var publicParams IBE.Params
 
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
 	master, err := IBE.SetupBB2()
 	if err != nil {
 		panic(err)
@@ -74,14 +77,15 @@ func GenCiphTokens(m IBE.Master, data string) []string {
 // if it can decrypt, then
 func ExtractEncryptedKeywords(encryptedTokens []string, keywords []Keyword) {
 	var foundCount = make([]int, len(keywords))
+	var done = make(chan bool)
 
-	for _, v := range encryptedTokens {
-		cipherBytes, err := base64.URLEncoding.DecodeString(v)
-		if err != nil {
-			panic(err)
-		}
+	extractor := func(i int, sk Keyword) {
+		for _, v := range encryptedTokens {
+			cipherBytes, err := base64.URLEncoding.DecodeString(v)
+			if err != nil {
+				panic(err)
+			}
 
-		for i, sk := range keywords {
 			message := make([]byte, 1)
 			decryptErr := sk.PrivateKey.Decrypt(cipherBytes, message)
 			if decryptErr != nil {
@@ -94,13 +98,23 @@ func ExtractEncryptedKeywords(encryptedTokens []string, keywords []Keyword) {
 				foundCount[i]++
 			}
 		}
+
+		done <- true
+	}
+
+	for i, sk := range keywords {
+		go extractor(i, sk)
+	}
+
+	for i := 0; i < len(keywords); i++ {
+		<-done
 	}
 
 	color.Cyan("Done!")
 
 	totals := ""
 	for i, k := range keywords {
-		totals += fmt.Sprintf("%s: %d, ", k.Word, foundCount[i])
+		totals += fmt.Sprintf("%s: %d\n", k.Word, foundCount[i])
 	}
 
 	color.Green("Extracted Keywords:\n%s", totals)
