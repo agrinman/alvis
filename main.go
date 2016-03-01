@@ -23,7 +23,7 @@ type Keyword struct {
 var publicParams IBE.Params
 
 func main() {
-	master, err := IBE.SetupBB1()
+	master, err := IBE.SetupBB2()
 	if err != nil {
 		panic(err)
 	}
