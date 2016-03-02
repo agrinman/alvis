@@ -94,7 +94,7 @@ func ExtractEncryptedKeywords(encryptedTokens []string, keywords []Keyword) {
 			}
 
 			if message[0] == 0x01 {
-				fmt.Printf("Decrypted Keyword (%s) from Ciphertext (%s...%s)\n", color.GreenString(sk.Word), color.YellowString(v[0:5]), color.YellowString(v[len(v)-5:]))
+				fmt.Printf("Decrypted Keyword (%s) from Ciphertext (%s...%s)\n", color.GreenString(sk.Word), color.YellowString(v[0:8]), color.YellowString(v[len(v)-8:]))
 				foundCount[i]++
 			}
 		}
