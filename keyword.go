@@ -1,4 +1,4 @@
-package main
+package alvis
 
 import (
 	"encoding/base64"
@@ -35,6 +35,7 @@ func main() {
 
 	var encrypedTokens = GenCiphTokens(master, sampleText)
 	var keywordSecretKeys = GenKeywordSKs(master, sampleKeyWords)
+ 
 
 	ExtractEncryptedKeywords(encrypedTokens, keywordSecretKeys)
 }
