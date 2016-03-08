@@ -1,23 +1,25 @@
 package alvis
 
 import (
-	"bytes"
-	"crypto/rand"
-	"crypto/sha256"
-	"fmt"
-	"golang.org/x/crypto/bn256"
-	"math/big"
+	"github.com/Nik-U/pbc"
 )
 
 //////////////////////////////////////////////
 //MARK: Default Contants
+// To be secure, generic discrete log algorithms must be infeasible in groups of order r,
+// and finite field discrete log algorithms must be infeasible in groups of order q^2.
 /////////////////////////////////////////////
 
 const (
-	N = 128
+	// R is the order...
+	R = 160
+
+	// Q is the bitlen of a prime for field F_q for some prime q = 3 mod 4
+	Q = 512
 )
 
 var (
+	// Σ is the default alphabet for the DFA
 	Σ = []rune{
 		'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
 		'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
@@ -30,19 +32,24 @@ var (
 //MARK: PP, MSK, SK CT
 /////////////////////////////////////////////
 
+// PublicParams are the system parameters
 type PublicParams struct {
-	G, Z, Hs, He *bn256.G1
-	H            map[rune]*bn256.G1
-	E            *bn256.GT
+	G, Z, Hs, He *pbc.Element
+	H            map[rune]*pbc.Element
+	E            *pbc.Element
+	Params       *pbc.Params
 }
 
+// MasterSecretKey is msk
 type MasterSecretKey struct {
-	D *big.Int
+	D *pbc.Element
 }
 
+// SecretKey is sk
 type SecretKey struct {
 }
 
+// CipherText is ct
 type CipherText struct {
 }
 
@@ -52,57 +59,47 @@ type CipherText struct {
 
 // DefaultSetup runs Setup with default inputs
 func DefaultSetup() (MasterSecretKey, PublicParams, error) {
-	return Setup(Σ)
+	return Setup(R, Q, Σ)
 }
 
 // Setup initializaes the MSK and PP
-func Setup(alphabet []rune) (MasterSecretKey, PublicParams, error) {
+func Setup(r uint32, q uint32, alphabet []rune) (MasterSecretKey, PublicParams, error) {
+	pbc.SetCryptoRandom()
+
 	msk := MasterSecretKey{}
 	pp := PublicParams{}
 
-	// gen random g, z, hStart, hEnd from G
-	_, g, err := bn256.RandomG1(rand.Reader)
-	if err != nil {
-		return msk, pp, err
-	}
-	_, z, err := bn256.RandomG1(rand.Reader)
-	if err != nil {
-		return msk, pp, err
-	}
-	_, hStart, err := bn256.RandomG1(rand.Reader)
-	if err != nil {
-		return msk, pp, err
-	}
-	_, hEnd, err := bn256.RandomG1(rand.Reader)
-	if err != nil {
-		return msk, pp, err
-	}
+	pp.Params = pbc.GenerateA(r, q)
+
+	pairing := pp.Params.NewPairing()
+
+	g := pairing.NewG1().Rand()
+	z := pairing.NewG1().Rand()
+	hStart := pairing.NewG1().Rand()
+	hEnd := pairing.NewG1().Rand()
 
 	// gen random v for each char in alphabet
-	hMap := make(map[rune]*bn256.G1)
+	hMap := make(map[rune]*pbc.Element)
 	for _, c := range alphabet {
-		_, v, err := bn256.RandomG1(rand.Reader)
-		if err != nil {
-			return msk, pp, err
-		}
-
-		hMap[c] = v
+		hMap[c] = pairing.NewG1().Rand()
 	}
 
 	// gen random alpha from Zp
-	a, err := random()
-	if err != nil {
-		return msk, pp, err
-	}
+	a := pairing.NewZr().Rand()
 
+	// set PP
 	pp.G = g
 	pp.Z = z
 	pp.Hs = hStart
 	pp.He = hEnd
 	pp.H = hMap
 
-	pp.E = bn256.Pair(g, g)
-	// Creat the secret
+	pairGG := pairing.NewGT().Pair(g, g)
+	pp.E = pairing.NewGT().PowZn(pairGG, a)
+
+	// Create the master secret g^(-a)
+	aInv := pairing.NewZr().Invert(a)
+	msk.D = pairing.NewG1().PowZn(g, aInv)
 
 	return msk, pp, nil
 }
@@ -121,58 +118,4 @@ func (p PublicParams) Encrypt(w string, m []byte) (CipherText, error) {
 // Decrypt a ciphertext using the secret key
 func (sk SecretKey) Decrypt(ct CipherText) ([]byte, error) {
 	return []byte{}, nil
-}
-
-//////////////////////////////////////////////
-// MARK: Helpers
-// FROM: https://golang.org/x/crypto/bn256
-/////////////////////////////////////////////
-
-// random returns a positive integer in the range [1, bn256.Order)
-// (denoted by Zp in http://crypto.stanford.edu/~dabo/papers/bbibe.pdf).
-//
-// The paper refers to random numbers drawn from Zp*. From a theoretical
-// perspective, the uniform distribution over Zp and Zp* start within a
-// statistical distance of 1/p (where p=bn256.Order is a ~256bit prime).  Thus,
-// drawing uniformly from Zp is no different from Zp*.
-func random() (*big.Int, error) {
-	for {
-		k, err := rand.Int(rand.Reader, bn256.Order)
-		if err != nil {
-			return nil, err
-		}
-		if k.Sign() > 0 {
-			return k, nil
-		}
-	}
-}
-
-// Hash a particular message with the given prefix. Specifically, this computes
-// SHA256(prefix || data) where prefix is a fixed-length string.
-func hashval(prefix [1]byte, data []byte) *[sha256.Size]byte {
-	hasher := sha256.New()
-	hasher.Write(prefix[:])
-	hasher.Write(data)
-
-	var ret [sha256.Size]byte
-	copy(ret[:], hasher.Sum(nil))
-
-	return &ret
-}
-
-// Hashes a value SHA256(prefix || data) where prefix is a fixed-length
-// string.  The hashed value is then converted  to a value modulo the group order.
-func val2bignum(prefix [1]byte, data []byte) *big.Int {
-	k := new(big.Int).SetBytes(hashval(prefix, data)[:])
-	return k.Mod(k, bn256.Order)
-}
-
-// marshalG1 writes the marshaled form of g into dst.
-func marshalG1(dst []byte, g *bn256.G1) error {
-	src := g.Marshal()
-	if len(src) != len(dst) {
-		return fmt.Errorf("bn256.G1.Marshal returned a %d byte slice, expected %d: the BB1 IBE implementation is likely broken", len(src), len(dst))
-	}
-	copy(dst, src)
-	return nil
 }
