@@ -67,6 +67,11 @@ type elementTriple struct {
 
 // CipherText is ct
 type CipherText struct {
+	Cm     *pbc.Element
+	Cstart elementDouble
+	Cend   elementDouble
+
+	C []elementDouble
 }
 
 //////////////////////////////////////////////
@@ -81,6 +86,7 @@ func DefaultSetup() (MasterSecretKey, PublicParams, error) {
 // Setup initializaes the MSK and PP
 func Setup(r uint32, q uint32, alphabet []rune) (MasterSecretKey, PublicParams, error) {
 	pbc.SetCryptoRandom()
+
 	msk := MasterSecretKey{}
 	pp := PublicParams{}
 
@@ -124,6 +130,8 @@ func Setup(r uint32, q uint32, alphabet []rune) (MasterSecretKey, PublicParams, 
 
 // KeyGen generates a secret key from a dfa and msk
 func (msk MasterSecretKey) KeyGen(dfa DFA) (SecretKey, error) {
+	pbc.SetCryptoRandom()
+
 	sk := SecretKey{}
 
 	pairing := msk.PublicKey.Params.NewPairing()
@@ -173,11 +181,71 @@ func (msk MasterSecretKey) KeyGen(dfa DFA) (SecretKey, error) {
 
 // Encrypt a word w with message m, under public params
 func (p PublicParams) Encrypt(w string, m []byte) (CipherText, error) {
+	pbc.SetCryptoRandom()
 
-	return CipherText{}, nil
+	ct := CipherText{}
+	pairing := p.Params.NewPairing()
+	L := len(w)
+
+	// generare random sl
+	sl := make([]*pbc.Element, L+1)
+	for i := 0; i < L+1; i++ {
+		sl[i] = pairing.NewZr().Rand()
+	}
+
+	// set Cm
+	mG := pairing.NewGT().SetBytes(m)
+	ct.Cm = pairing.NewGT().Mul(mG, pairing.NewGT().PowZn(p.E, sl[L]))
+
+	// set Cstart
+	cs1 := pairing.NewG1().PowZn(p.G, sl[0])
+	cs2 := pairing.NewG1().PowZn(p.Hs, sl[0])
+	ct.Cstart = elementDouble{E1: cs1, E2: cs2}
+
+	// set C
+	runes := []rune(w)
+	ct.C = make([]elementDouble, L)
+	for i := 1; i < L; i++ {
+		c1 := pairing.NewG1().PowZn(p.G, sl[i])
+		c2 := pairing.NewG1().Mul(
+			pairing.NewG1().PowZn(p.H[runes[i]], sl[i]),
+			pairing.NewG1().PowZn(p.Z, sl[i-1]),
+		)
+
+		ct.C[i] = elementDouble{c1, c2}
+
+	}
+
+	// set Cend
+	ce1 := pairing.NewG1().PowZn(p.G, sl[L])
+	ce2 := pairing.NewG1().PowZn(p.He, sl[L])
+	ct.Cend = elementDouble{ce1, ce2}
+
+	return ct, nil
 }
 
 // Decrypt a ciphertext using the secret key
-func (sk SecretKey) Decrypt(ct CipherText) ([]byte, error) {
+func (p PublicParams) Decrypt(sk SecretKey, ct CipherText) ([]byte, error) {
+	pbc.SetCryptoRandom()
+
+	pairing := p.Params.NewPairing()
+	L := len(ct.C) - 1
+
+	B := make([]*pbc.Element, L+1)
+
+	// compute B[0]
+	B[0] = pairing.NewGT().Mul(
+		pairing.NewGT().Pair(ct.Cstart.E1, sk.Kstart.E1),
+		pairing.NewGT().Invert(pairing.NewGT().Pair(ct.Cstart.E2, sk.Kstart.E2)),
+	)
+
+	// compute B
+
+	for i := 1; i < len(ct.C); i++ {
+		//ti := sk.M.TransitionMap[]
+		//mul1 := pairing.NewGT().Mul(B[i-1], pairing.NewGT().Pair(ct.C[i-1].E1, y *pbc.Element))
+
+	}
+
 	return []byte{}, nil
 }

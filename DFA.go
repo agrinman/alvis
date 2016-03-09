@@ -16,6 +16,7 @@ type DFA struct {
 	States         []State
 	Alphabet       []rune
 	Transitions    []Transition
+	TransitionMap  map[State]map[State]int
 	Start          State
 	AcceptStates   []State
 }
