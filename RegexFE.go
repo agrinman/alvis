@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/Nik-U/pbc"
+	"math/big"
 )
 
 //////////////////////////////////////////////
@@ -38,6 +39,7 @@ type PublicParams struct {
 	H            map[rune]*pbc.Element
 	E            *pbc.Element
 	Params       *pbc.Params
+	R, Q         uint32
 }
 
 // MasterSecretKey is msk
@@ -67,6 +69,7 @@ type elementTriple struct {
 
 // CipherText is ct
 type CipherText struct {
+	w      []rune
 	Cm     *pbc.Element
 	Cstart elementDouble
 	Cend   elementDouble
@@ -88,7 +91,7 @@ func Setup(r uint32, q uint32, alphabet []rune) (MasterSecretKey, PublicParams, 
 	pbc.SetCryptoRandom()
 
 	msk := MasterSecretKey{}
-	pp := PublicParams{}
+	pp := PublicParams{R: r, Q: q}
 
 	pp.Params = pbc.GenerateA(r, q)
 
@@ -194,7 +197,7 @@ func (p PublicParams) Encrypt(w string, m []byte) (CipherText, error) {
 	}
 
 	// set Cm
-	mG := pairing.NewGT().SetBytes(m)
+	mG := pairing.NewGT().SetBig(new(big.Int).Mod(new(big.Int).SetBytes(m), new(big.Int).SetUint64(uint64(p.R))))
 	ct.Cm = pairing.NewGT().Mul(mG, pairing.NewGT().PowZn(p.E, sl[L]))
 
 	// set Cstart
@@ -239,13 +242,51 @@ func (p PublicParams) Decrypt(sk SecretKey, ct CipherText) ([]byte, error) {
 		pairing.NewGT().Invert(pairing.NewGT().Pair(ct.Cstart.E2, sk.Kstart.E2)),
 	)
 
-	// compute B
-
+	// compute B[i]
+	currentState := sk.M.Start
 	for i := 1; i < len(ct.C); i++ {
-		//ti := sk.M.TransitionMap[]
-		//mul1 := pairing.NewGT().Mul(B[i-1], pairing.NewGT().Pair(ct.C[i-1].E1, y *pbc.Element))
+		if transition, ok := sk.M.TransitionMap[currentState][ct.w[i-1]]; ok {
+			//do something here
+			mul1 := pairing.NewGT().Mul(
+				B[i-1],
+				pairing.NewGT().Pair(ct.C[i-1].E1, sk.K[transition].E1),
+			)
+			mul2 := pairing.NewGT().Mul(
+				pairing.NewGT().Invert(pairing.NewGT().Pair(ct.C[i].E2, sk.K[transition].E2)),
+				pairing.NewGT().Pair(ct.C[i].E1, sk.K[transition].E3),
+			)
 
+			B[i] = pairing.NewGT().Mul(mul1, mul2)
+			currentState = transition.Y
+		} else {
+			return []byte{}, DecryptionError{}
+		}
 	}
 
-	return []byte{}, nil
+	// Compute B_end
+	// if state is not in end states -- decr error
+	if _, ok := sk.Kend[currentState]; !ok {
+		return []byte{}, DecryptionError{}
+	}
+
+	mul1 := pairing.NewGT().Mul(
+		B[L],
+		pairing.NewGT().Invert(pairing.NewGT().Pair(ct.Cend.E1, sk.Kend[currentState].E1)),
+	)
+	Bend := pairing.NewGT().Mul(
+		mul1,
+		pairing.NewGT().Pair(ct.Cend.E2, sk.Kend[currentState].E2),
+	)
+
+	m := pairing.NewGT().Div(ct.Cm, Bend)
+
+	return m.BigInt().Bytes(), DecryptionError{}
+
+}
+
+// DecryptionError represents an error while decrypting
+type DecryptionError struct{}
+
+func (e DecryptionError) Error() string {
+	return "Error decrypting cipher text"
 }
