@@ -1,8 +1,8 @@
 package main
 
 import (
+	"fmt"
 	"github.com/Nik-U/pbc"
-	"math/big"
 )
 
 //////////////////////////////////////////////
@@ -40,6 +40,7 @@ type PublicParams struct {
 	E            *pbc.Element
 	Params       *pbc.Params
 	R, Q         uint32
+	Pairing      *pbc.Pairing
 }
 
 // MasterSecretKey is msk
@@ -94,8 +95,9 @@ func Setup(r uint32, q uint32, alphabet []rune) (MasterSecretKey, PublicParams, 
 	pp := PublicParams{R: r, Q: q}
 
 	pp.Params = pbc.GenerateA(r, q)
+	pp.Pairing = pp.Params.NewPairing()
 
-	pairing := pp.Params.NewPairing()
+	pairing := pp.Pairing
 
 	g := pairing.NewG1().Rand()
 	z := pairing.NewG1().Rand()
@@ -136,8 +138,8 @@ func (msk MasterSecretKey) KeyGen(dfa DFA) (SecretKey, error) {
 	pbc.SetCryptoRandom()
 
 	sk := SecretKey{}
-
-	pairing := msk.PublicKey.Params.NewPairing()
+	sk.M = dfa
+	pairing := msk.PublicKey.Pairing
 
 	D := make(map[State]*pbc.Element)
 	for _, q := range dfa.States {
@@ -156,7 +158,7 @@ func (msk MasterSecretKey) KeyGen(dfa DFA) (SecretKey, error) {
 	}
 
 	// create the key
-	ks1 := pairing.NewG1().Mul(D[dfa.Start], pairing.NewG1().PowZn(msk.PublicKey.Hs, rStart))
+	ks1 := D[dfa.Start].ThenMul(msk.PublicKey.Hs.ThenPowZn(rStart))
 	ks2 := pairing.NewG1().PowZn(msk.PublicKey.G, rStart)
 	sk.Kstart = elementDouble{E1: ks1, E2: ks2}
 
@@ -187,7 +189,9 @@ func (p PublicParams) Encrypt(w string, m []byte) (CipherText, error) {
 	pbc.SetCryptoRandom()
 
 	ct := CipherText{}
-	pairing := p.Params.NewPairing()
+	ct.w = []rune(w)
+
+	pairing := p.Pairing
 	L := len(w)
 
 	// generare random sl
@@ -197,7 +201,7 @@ func (p PublicParams) Encrypt(w string, m []byte) (CipherText, error) {
 	}
 
 	// set Cm
-	mG := pairing.NewGT().SetBig(new(big.Int).Mod(new(big.Int).SetBytes(m), new(big.Int).SetUint64(uint64(p.R))))
+	mG := pairing.NewGT().SetBytes(m)
 	ct.Cm = pairing.NewGT().Mul(mG, pairing.NewGT().PowZn(p.E, sl[L]))
 
 	// set Cstart
@@ -208,7 +212,7 @@ func (p PublicParams) Encrypt(w string, m []byte) (CipherText, error) {
 	// set C
 	runes := []rune(w)
 	ct.C = make([]elementDouble, L)
-	for i := 1; i < L; i++ {
+	for i := 0; i < L; i++ {
 		c1 := pairing.NewG1().PowZn(p.G, sl[i])
 		c2 := pairing.NewG1().Mul(
 			pairing.NewG1().PowZn(p.H[runes[i]], sl[i]),
@@ -231,7 +235,7 @@ func (p PublicParams) Encrypt(w string, m []byte) (CipherText, error) {
 func (p PublicParams) Decrypt(sk SecretKey, ct CipherText) ([]byte, error) {
 	pbc.SetCryptoRandom()
 
-	pairing := p.Params.NewPairing()
+	pairing := p.Pairing
 	L := len(ct.C) - 1
 
 	B := make([]*pbc.Element, L+1)
@@ -243,10 +247,15 @@ func (p PublicParams) Decrypt(sk SecretKey, ct CipherText) ([]byte, error) {
 	)
 
 	// compute B[i]
+	fmt.Println(ct.C)
+
 	currentState := sk.M.Start
 	for i := 1; i < len(ct.C); i++ {
 		if transition, ok := sk.M.TransitionMap[currentState][ct.w[i-1]]; ok {
 			//do something here
+			fmt.Println(ct.C[i-1])
+			fmt.Println(i, currentState, ct.w[i-1])
+			fmt.Println(ct.C[i])
 			mul1 := pairing.NewGT().Mul(
 				B[i-1],
 				pairing.NewGT().Pair(ct.C[i-1].E1, sk.K[transition].E1),
@@ -259,6 +268,9 @@ func (p PublicParams) Decrypt(sk SecretKey, ct CipherText) ([]byte, error) {
 			B[i] = pairing.NewGT().Mul(mul1, mul2)
 			currentState = transition.Y
 		} else {
+			fmt.Println(sk.M.TransitionMap)
+			fmt.Println(i, currentState, ct.w[i-1])
+			fmt.Println("har1")
 			return []byte{}, DecryptionError{}
 		}
 	}
@@ -266,6 +278,7 @@ func (p PublicParams) Decrypt(sk SecretKey, ct CipherText) ([]byte, error) {
 	// Compute B_end
 	// if state is not in end states -- decr error
 	if _, ok := sk.Kend[currentState]; !ok {
+		fmt.Println("har2")
 		return []byte{}, DecryptionError{}
 	}
 
@@ -280,7 +293,7 @@ func (p PublicParams) Decrypt(sk SecretKey, ct CipherText) ([]byte, error) {
 
 	m := pairing.NewGT().Div(ct.Cm, Bend)
 
-	return m.BigInt().Bytes(), DecryptionError{}
+	return m.Bytes(), nil
 
 }
 
