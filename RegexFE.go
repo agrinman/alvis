@@ -1,4 +1,4 @@
-package alvis
+package main
 
 import (
 	"github.com/Nik-U/pbc"

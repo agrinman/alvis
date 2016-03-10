@@ -1,4 +1,4 @@
-package alvis
+package main
 
 // Transition is the tuple of X -> Y on input C
 type Transition struct {
