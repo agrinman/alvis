@@ -18,11 +18,11 @@ func sampleDFA() DFA {
 		States:         []State{0, 1, 2, 3, 4},
 		Alphabet:       []rune{'a', 'b'},
 		Transitions: []Transition{
-			Transition{0, 1, 'a'},
-			Transition{1, 2, 'a'},
-			Transition{2, 3, 'b'},
-			Transition{3, 4, 'b'},
-			Transition{4, 4, 'b'},
+			Transition{0, 1, 'a', 0},
+			Transition{1, 2, 'a', 1},
+			Transition{2, 3, 'b', 2},
+			Transition{3, 4, 'b', 3},
+			Transition{4, 4, 'b', 4},
 		},
 		Start:        0,
 		AcceptStates: []State{4},
@@ -34,7 +34,6 @@ func sampleDFA() DFA {
 		tMap[t.X] = make(map[rune]Transition)
 		tMap[t.X][t.C] = t
 	}
-	fmt.Println(tMap)
 	M.TransitionMap = tMap
 
 	return M
@@ -57,7 +56,7 @@ func TestEncryptDecrypt(t *testing.T) {
 		return
 	}
 
-	ct, err := pp.Encrypt("aabb", []byte{0x01})
+	ct, err := pp.Encrypt("aabbbc", []byte{0x01})
 	if err != nil {
 		t.Error(err)
 		return

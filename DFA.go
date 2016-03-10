@@ -5,6 +5,7 @@ type Transition struct {
 	X State
 	Y State
 	C rune
+	I int
 }
 
 // State represents the state id as an int
