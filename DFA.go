@@ -26,3 +26,9 @@ type DFA struct {
 func GenDFA(regex string) DFA {
 	return DFA{}
 }
+
+type nfa DFA
+
+func genNFA(regex string) nfa {
+	return nfa{}
+}

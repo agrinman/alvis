@@ -56,7 +56,7 @@ func TestEncryptDecrypt(t *testing.T) {
 		return
 	}
 
-	ct, err := pp.Encrypt("aabbbc", []byte{0x01})
+	ct, err := pp.Encrypt("aabbb", []byte{0x01})
 	if err != nil {
 		t.Error(err)
 		return
