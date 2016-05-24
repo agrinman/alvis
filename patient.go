@@ -1,4 +1,6 @@
 package main
 
-type Patient struct {
+//MARK: Free text helpers
+func SplitFreeText(text string) []string {
+	return []string{}
 }

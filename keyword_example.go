@@ -14,7 +14,7 @@ const (
 
 var sampleKeyWords = []string{"lorem", "felis", "eros", "porta"}
 
-func oldMain() {
+func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	color.Yellow("Sample Text")
