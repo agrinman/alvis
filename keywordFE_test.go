@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 	"runtime"
 	"strings"
@@ -43,7 +44,30 @@ func BenchmarkKeywordFEEncryption(b *testing.B) {
 }
 
 func TestKeywordFESizeBlowup(t *testing.T) {
+	color.Yellow("Number of words: %d", len(sampleWords))
 
+	sum := 0
+	for w := range sampleKeyWords {
+		sum += len(sampleKeyWords[w])
+	}
+
+	color.Yellow("Average word length plaintext (bytes): %f", float64(sum)/float64(len(sampleWords)))
+
+	master, err := IBE.SetupBB2()
+	if err != nil {
+		t.Error(err)
+	}
+
+	tokens := GenCiphTokens(master, sampleWords)
+	encSum := 0
+	for i := range tokens {
+		tok, _ := base64.URLEncoding.DecodeString(tokens[i])
+		encSum += len(tok)
+	}
+
+	color.Yellow("[Encrypted] Average word length (bytes): %f", float64(encSum)/float64(len(sampleWords)))
+
+	color.Cyan("Blowup: %f", float64(encSum)/float64(sum))
 }
 
 func TestShowKeywordFE(t *testing.T) {
