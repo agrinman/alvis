@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"runtime"
+	"strings"
+	"testing"
 
 	"github.com/fatih/color"
 	IBE "github.com/vanadium/go.lib/ibe"
@@ -14,7 +16,37 @@ const (
 
 var sampleKeyWords = []string{"lorem", "felis", "eros", "porta"}
 
-func main() {
+func getSampleTextWords() []string {
+	filteredText := strings.Replace(sampleText, ".", "", -1)
+	filteredText = strings.Replace(filteredText, ",", "", -1)
+	return strings.Split(filteredText, " ")
+}
+
+var sampleWords = getSampleTextWords()
+
+func BenchmarkKeywordFEEncryption(b *testing.B) {
+
+	words := []string{"feugiat"}
+	color.Yellow("Number of words: %d", len(words))
+
+	master, err := IBE.SetupBB2()
+	if err != nil {
+		b.Error(err)
+	}
+
+	publicParams = master.Params()
+
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		GenCiphTokens(master, words)
+	}
+}
+
+func TestKeywordFESizeBlowup(t *testing.T) {
+
+}
+
+func TestShowKeywordFE(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	color.Yellow("Sample Text")
@@ -30,7 +62,7 @@ func main() {
 
 	publicParams = master.Params()
 
-	var encrypedTokens = GenCiphTokens(master, sampleText)
+	var encrypedTokens = GenCiphTokens(master, sampleWords)
 	var keywordSecretKeys = GenKeywordSKs(master, sampleKeyWords)
 
 	ExtractEncryptedKeywords(encrypedTokens, keywordSecretKeys)

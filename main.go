@@ -6,7 +6,7 @@ import (
 	"io/ioutil"
 )
 
-func newmain() {
+func main() {
 	// parse test.json
 	data, _ := ioutil.ReadFile("test.json")
 

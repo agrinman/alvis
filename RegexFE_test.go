@@ -7,6 +7,8 @@ import (
 )
 
 // TestMain setup
+// test with GODEBUG=cgocheck=0
+
 func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
@@ -40,7 +42,7 @@ func sampleDFA() DFA {
 }
 
 // TestGenAndEval tests functionality
-func TestEncryptDecrypt(t *testing.T) {
+func TestRegexFE(t *testing.T) {
 	msk, pp, err := DefaultSetup()
 	if err != nil {
 		t.Error(err)

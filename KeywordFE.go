@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
-	"strings"
 
 	"github.com/fatih/color"
 	IBE "github.com/vanadium/go.lib/ibe"
@@ -34,13 +33,10 @@ func GenKeywordSKs(m IBE.Master, keywords []string) []Keyword {
 }
 
 // GenCiphTokens creates sk's for each keyword
-func GenCiphTokens(m IBE.Master, data string) []string {
-	filteredText := strings.Replace(data, ".", "", -1)
-	filteredText = strings.Replace(filteredText, ",", "", -1)
-	tokens := strings.Split(filteredText, " ")
+func GenCiphTokens(m IBE.Master, data []string) []string {
 
-	ciphTokens := make([]string, len(tokens))
-	for i, t := range tokens {
+	ciphTokens := make([]string, len(data))
+	for i, t := range data {
 		ciph := make([]byte, 1+m.Params().CiphertextOverhead())
 		m.Params().Encrypt(t, []byte{0x01}, ciph)
 
