@@ -1,0 +1,18 @@
+[submodule "vendor/github.com/Nik-U/pbc"]
+	path = vendor/github.com/Nik-U/pbc
+	url = git://github.com/Nik-U/pbc
+[submodule "vendor/github.com/fatih/color"]
+	path = vendor/github.com/fatih/color
+	url = git://github.com/fatih/color
+[submodule "vendor/github.com/mattn/go-colorable"]
+	path = vendor/github.com/mattn/go-colorable
+	url = git://github.com/mattn/go-colorable
+[submodule "vendor/github.com/mattn/go-isatty"]
+	path = vendor/github.com/mattn/go-isatty
+	url = git://github.com/mattn/go-isatty
+[submodule "vendor/github.com/urfave/cli"]
+	path = vendor/github.com/urfave/cli
+	url = git://github.com/urfave/cli
+[submodule "vendor/github.com/vanadium/go.lib"]
+	path = vendor/github.com/vanadium/go.lib
+	url = git://github.com/vanadium/go.lib
