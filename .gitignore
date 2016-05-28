@@ -3,3 +3,4 @@ alvis
 debug
 *.json
 main
+*.priv

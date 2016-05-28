@@ -32,7 +32,7 @@ func GenKeywordSKs(m IBE.Master, keywords []string) []Keyword {
 	return secretKeys
 }
 
-// GenCiphTokens creates sk's for each keyword
+// GenCiphTokens creates cipher texts for each word in the data stream
 func GenCiphTokens(m IBE.Master, data []string) []string {
 
 	ciphTokens := make([]string, len(data))

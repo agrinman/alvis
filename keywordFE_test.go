@@ -47,8 +47,8 @@ func TestKeywordFESizeBlowup(t *testing.T) {
 	color.Yellow("Number of words: %d", len(sampleWords))
 
 	sum := 0
-	for w := range sampleKeyWords {
-		sum += len(sampleKeyWords[w])
+	for w := range sampleWords {
+		sum += len([]byte(sampleWords[w]))
 	}
 
 	color.Yellow("Average word length plaintext (bytes): %f", float64(sum)/float64(len(sampleWords)))
