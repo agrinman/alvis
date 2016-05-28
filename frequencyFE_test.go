@@ -4,22 +4,22 @@ import "testing"
 import "bytes"
 
 func TestFrequencyFE(t *testing.T) {
-	inner, outer, err := GenFrequencyFE()
+	master, err := GenFrequencyFE()
 	if err != nil {
 		t.Error(err)
 	}
 	message := []byte("hello world")
-	ctxt, err := EncryptInnerOuter(inner, outer, message)
+	ctxt, err := EncryptInnerOuter(master, message)
 	if err != nil {
 		t.Error(err)
 	}
 
-	innerCtxt, err := DecryptOuter(outer, ctxt)
+	innerCtxt, err := DecryptOuter(master.OuterKey, ctxt)
 	if err != nil {
 		t.Error(err)
 	}
 
-	out, err := DecryptInner(inner, innerCtxt)
+	out, err := DecryptInner(master, innerCtxt)
 	if err != nil {
 		t.Error(err)
 	}

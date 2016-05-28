@@ -38,9 +38,56 @@ func SplitFreeText(text string) []string {
 
 //MARK: ClI Commands
 
+type MasterKey struct {
+	KeywordKey   KeyParams
+	FrequencyKey FreqFEMasterKey
+}
+
 type KeyParams struct {
 	Key    string `json:"key"`
 	Params string `json:"params"`
+}
+
+func parseMasterKey(filepath string) (master IBE.Master, freq FreqFEMasterKey, err error) {
+	mskBytes, err := ioutil.ReadFile(filepath)
+	if err != nil {
+		color.Red(err.Error())
+		return
+	}
+
+	// unmarshall master secret
+	var msk MasterKey
+	err = json.Unmarshal(mskBytes, &msk)
+	if err != nil {
+		color.Red(err.Error())
+		return
+	}
+
+	// ibe master
+	mskKey, err := base64.StdEncoding.DecodeString(msk.KeywordKey.Key)
+	if err != nil {
+		color.Red(err.Error())
+		return
+	}
+	mskParams, err := base64.StdEncoding.DecodeString(msk.KeywordKey.Params)
+	if err != nil {
+		color.Red(err.Error())
+		return
+	}
+
+	params, err := IBE.UnmarshalParams(mskParams)
+	if err != nil {
+		color.Red(err.Error())
+		return
+	}
+
+	master, err = IBE.UnmarshalMasterKey(params, mskKey)
+	if err != nil {
+		color.Red(err.Error())
+		return
+	}
+
+	return master, msk.FrequencyKey, err
 }
 
 func genMaster(c *cli.Context) (err error) {
@@ -51,28 +98,36 @@ func genMaster(c *cli.Context) (err error) {
 
 	outPath := c.String("out")
 
-	master, err := IBE.SetupBB2()
+	// setup frequency key
+	freqMaster, err := GenFrequencyFE()
 	if err != nil {
 		color.Red(err.Error())
 		return
 	}
 
-	// marshall master key
-	masterBytes, err := IBE.MarshalMasterKey(master)
+	// setup ibe key
+	ibeMaster, err := IBE.SetupBB2()
+	if err != nil {
+		color.Red(err.Error())
+		return
+	}
+
+	// marshall ibe master key
+	masterBytes, err := IBE.MarshalMasterKey(ibeMaster)
 	if err != nil {
 		color.Red(err.Error())
 		return
 	}
 	masterB64 := base64.StdEncoding.EncodeToString(masterBytes)
 
-	paramsBytes, err := IBE.MarshalParams(master.Params())
+	paramsBytes, err := IBE.MarshalParams(ibeMaster.Params())
 	if err != nil {
 		color.Red(err.Error())
 		return
 	}
 	paramsB64 := base64.StdEncoding.EncodeToString(paramsBytes)
 
-	msk := KeyParams{masterB64, paramsB64}
+	msk := MasterKey{KeyParams{masterB64, paramsB64}, freqMaster}
 
 	outBytes, err := json.Marshal(msk)
 	if err != nil {
@@ -94,38 +149,8 @@ func genKeywordKey(c *cli.Context) (err error) {
 
 	// read master secret file
 	mskPath := c.String("msk")
-	mskBytes, err := ioutil.ReadFile(mskPath)
-	if err != nil {
-		color.Red(err.Error())
-		return
-	}
 
-	// unmarshall master secret
-	var msk KeyParams
-	err = json.Unmarshal(mskBytes, &msk)
-	if err != nil {
-		color.Red(err.Error())
-		return
-	}
-
-	mskKey, err := base64.StdEncoding.DecodeString(msk.Key)
-	if err != nil {
-		color.Red(err.Error())
-		return
-	}
-	mskParams, err := base64.StdEncoding.DecodeString(msk.Params)
-	if err != nil {
-		color.Red(err.Error())
-		return
-	}
-
-	params, err := IBE.UnmarshalParams(mskParams)
-	if err != nil {
-		color.Red(err.Error())
-		return
-	}
-
-	master, err := IBE.UnmarshalMasterKey(params, mskKey)
+	master, _, err := parseMasterKey(mskPath)
 	if err != nil {
 		color.Red(err.Error())
 		return
@@ -174,6 +199,28 @@ func genKeywordKey(c *cli.Context) (err error) {
 }
 
 func genFrequencyKey(c *cli.Context) (err error) {
+	if c.NumFlags() < 3 {
+		color.Red("Missing 'msk' for path to master secret key OR '-word' for the keyword OR '-out' flag for filepath of search keyword secret key")
+		return
+	}
+
+	// read master secret file
+	mskPath := c.String("msk")
+
+	_, freq, err := parseMasterKey(mskPath)
+	if err != nil {
+		color.Red(err.Error())
+		return
+	}
+
+	outBytes := freq.OuterKey
+
+	// get outPath
+	outPath := c.String("out")
+
+	// write file
+	err = ioutil.WriteFile(outPath, outBytes, 0660)
+
 	return
 }
 
@@ -185,38 +232,7 @@ func encrypt(c *cli.Context) (err error) {
 
 	// read master secret file
 	mskPath := c.String("msk")
-	mskBytes, err := ioutil.ReadFile(mskPath)
-	if err != nil {
-		color.Red(err.Error())
-		return
-	}
-
-	// unmarshall master secret
-	var msk KeyParams
-	err = json.Unmarshal(mskBytes, &msk)
-	if err != nil {
-		color.Red(err.Error())
-		return
-	}
-
-	mskKey, err := base64.StdEncoding.DecodeString(msk.Key)
-	if err != nil {
-		color.Red(err.Error())
-		return
-	}
-	mskParams, err := base64.StdEncoding.DecodeString(msk.Params)
-	if err != nil {
-		color.Red(err.Error())
-		return
-	}
-
-	params, err := IBE.UnmarshalParams(mskParams)
-	if err != nil {
-		color.Red(err.Error())
-		return
-	}
-
-	_, err = IBE.UnmarshalMasterKey(params, mskKey)
+	_, _, err = parseMasterKey(mskPath)
 	if err != nil {
 		color.Red(err.Error())
 		return
