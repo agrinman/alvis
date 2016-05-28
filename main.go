@@ -173,7 +173,58 @@ func genKeywordKey(c *cli.Context) (err error) {
 	return
 }
 
+func genFrequencyKey(c *cli.Context) (err error) {
+	return
+}
+
 func encrypt(c *cli.Context) (err error) {
+	if c.NumFlags() < 3 {
+		color.Red("Missing 'msk' for path to master secret key OR '-patient-dir' for directory of patient files OR '-out-dir' for the directory of the encrypted patient files")
+		return
+	}
+
+	// read master secret file
+	mskPath := c.String("msk")
+	mskBytes, err := ioutil.ReadFile(mskPath)
+	if err != nil {
+		color.Red(err.Error())
+		return
+	}
+
+	// unmarshall master secret
+	var msk KeyParams
+	err = json.Unmarshal(mskBytes, &msk)
+	if err != nil {
+		color.Red(err.Error())
+		return
+	}
+
+	mskKey, err := base64.StdEncoding.DecodeString(msk.Key)
+	if err != nil {
+		color.Red(err.Error())
+		return
+	}
+	mskParams, err := base64.StdEncoding.DecodeString(msk.Params)
+	if err != nil {
+		color.Red(err.Error())
+		return
+	}
+
+	params, err := IBE.UnmarshalParams(mskParams)
+	if err != nil {
+		color.Red(err.Error())
+		return
+	}
+
+	_, err = IBE.UnmarshalMasterKey(params, mskKey)
+	if err != nil {
+		color.Red(err.Error())
+		return
+	}
+
+	// read patient files
+	_ = c.String("patient-dir")
+
 	return
 }
 
@@ -203,19 +254,35 @@ func main() {
 		{
 			Name:    "gen-sk",
 			Aliases: nil,
-			Usage:   "Generate a secret, functional decryption key, for a search keyword",
-			Action:  genKeywordKey,
-			Flags: []cli.Flag{
-				cli.StringFlag{Name: "msk"},
-				cli.StringFlag{Name: "word"},
-				cli.StringFlag{Name: "out"},
+			Usage:   "Generate a secret, functional decryption key for: keyword or frequency",
+			Subcommands: []cli.Command{
+				{
+					Name:   "keyword",
+					Usage:  "search keyword functional key",
+					Action: genKeywordKey,
+					Flags: []cli.Flag{
+						cli.StringFlag{Name: "word"},
+						cli.StringFlag{Name: "msk"},
+						cli.StringFlag{Name: "out"},
+					},
+				},
+				{
+					Name:   "frequency",
+					Usage:  "functional key for computing frequency count",
+					Action: genFrequencyKey,
+				},
 			},
 		},
 		{
 			Name:    "encrypt",
 			Aliases: nil,
-			Usage:   "Encrypt patient files...specify directory of patient files, and output",
+			Usage:   "Encrypt patient files",
 			Action:  encrypt,
+			Flags: []cli.Flag{
+				cli.StringFlag{Name: "msk"},
+				cli.StringFlag{Name: "patient-dir"},
+				cli.StringFlag{Name: "out-dir"},
+			},
 		},
 		{
 			Name:    "decrypt",

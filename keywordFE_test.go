@@ -27,8 +27,8 @@ var sampleWords = getSampleTextWords()
 
 func BenchmarkKeywordFEEncryption(b *testing.B) {
 
-	words := []string{"feugiat"}
-	color.Yellow("Number of words: %d", len(words))
+	words := []string{"feugiatfeugiatfeugiatfeugiat"}
+	color.Yellow("Number of bytes: %d", len([]byte(words[0])))
 
 	master, err := IBE.SetupBB2()
 	if err != nil {
