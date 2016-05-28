@@ -4,3 +4,4 @@ debug
 *.json
 main
 *.priv
+*.key
