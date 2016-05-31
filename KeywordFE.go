@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
+	"sync"
 
 	"github.com/fatih/color"
 	IBE "github.com/vanadium/go.lib/ibe"
@@ -36,13 +37,20 @@ func GenKeywordSKs(m IBE.Master, keywords []string) []Keyword {
 func GenCiphTokens(m IBE.Master, data []string) []string {
 
 	ciphTokens := make([]string, len(data))
-	for i, t := range data {
-		ciph := make([]byte, 1+m.Params().CiphertextOverhead())
-		m.Params().Encrypt(t, []byte{0x01}, ciph)
 
-		ciphTokens[i] = base64.URLEncoding.EncodeToString(ciph)
+	var wg sync.WaitGroup
+	wg.Add(len(data))
+
+	for i, t := range data {
+		go func(i int, t string, w *sync.WaitGroup) {
+			ciph := make([]byte, 1+m.Params().CiphertextOverhead())
+			m.Params().Encrypt(t, []byte{0x01}, ciph)
+			ciphTokens[i] = base64.URLEncoding.EncodeToString(ciph)
+			w.Done()
+		}(i, t, &wg)
 	}
 
+	wg.Wait()
 	return ciphTokens
 }
 

@@ -6,3 +6,4 @@ main
 *.priv
 *.key
 *.sk
+encrypted/
