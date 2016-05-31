@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/base64"
 	"encoding/json"
+	"log"
 	"path"
 	"runtime"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/urfave/cli"
 	IBE "github.com/vanadium/go.lib/ibe"
 
+	"net/http"
 	_ "net/http/pprof"
 )
 
@@ -370,9 +372,9 @@ func decrypt(c *cli.Context) (err error) {
 //MARK: CLI
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	// go func() {
-	// 	log.Println(http.ListenAndServe("localhost:6060", nil))
-	// }()
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 
 	app := cli.NewApp()
 

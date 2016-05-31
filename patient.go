@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -129,11 +130,13 @@ func oldmain() {
 
 	for i := range cardiacNotes {
 		note := cardiacNotes[i].(map[string]interface{})
-		wordCount += len(SplitFreeText(note["free_text"].(string)))
 
-		if i == 0 {
-			fmt.Println("free text: ", note["free_text"].(string))
-			fmt.Println("tokenized text: ", SplitFreeText(note["free_text"].(string)))
+		toks := SplitFreeText(note["free_text"].(string))
+		for _, t := range toks {
+			if _, err := strconv.Atoi(t); err == nil {
+				continue
+			}
+			wordCount += 1
 		}
 	}
 
@@ -142,8 +145,14 @@ func oldmain() {
 
 	for i := range lnoNotes {
 		note := lnoNotes[i].(map[string]interface{})
-		wordCount += len(SplitFreeText(note["free_text"].(string)))
+		toks := SplitFreeText(note["free_text"].(string))
+		for _, t := range toks {
+			if _, err := strconv.Atoi(t); err == nil {
+				continue
+			}
+			wordCount += 1
+		}
 	}
 
-	fmt.Println("number of tokens in a patient file: ", wordCount)
+	fmt.Println("number of tokens (ints excluded) in a patient file: ", wordCount)
 }
