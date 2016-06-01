@@ -47,6 +47,18 @@ func TestIBE(t *testing.T) {
 	}
 }
 
+func TestMarshalMasterKey(t *testing.T) {
+	msk, _ := DefaultSetup()
+	fmt.Println("hello worldd")
+	res, err := MarshalMasterKey(msk)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	fmt.Println(string(res))
+}
+
 // func TestIBEParallel(t *testing.T) {
 // 	_, pp := DefaultSetup()
 //
