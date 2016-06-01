@@ -2,10 +2,14 @@ package ibe
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 	"testing"
+
+	"github.com/fatih/color"
 )
 
 func TestMain(m *testing.M) {
@@ -112,6 +116,103 @@ func BenchmarkIBEEncrypt(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		_ = pp.Encrypt("feugiatfeugiatfeugiatfeugiat", m)
 	}
+}
+
+const (
+	sampleText = `Pellentesque sed viverra nisi, ut sollicitudin felis. Curabitur lorem neque, pulvinar vel porta et, euismod dignissim turpis. Nullam consequat sapien leo, ac rhoncus tortor imperdiet a. Praesent condimentum nunc ante, at cursus diam maximus vitae. In eleifend aliquam velit, eget fermentum nunc. Integer sit lorem lacus porta, rutrum lacus vel, felis felis. In ut metus lacinia erat dapibus accumsan. Nulla facilisi. Ut ut lectus feugiat lorem felis vestibulum. Ut lorem, diam in posuere vehicula, nulla turpis venenatis tortor, nec ullamcorper dolor neque et ligula. Suspendisse eu libero vel erat congue tempor non molestie arcu. Donec auctor, sem vitae malesuada lobortis, lorem eros accumsan nibh, id tempus risus lorem quis nullam. Sed euismod rhoncus elit, non eleifend tortor fringilla felis. Aliquam erat volutpat. Morbi interdum elit nec efficitur malesuada.`
+)
+
+var sampleKeyWords = []string{"lorem", "felis", "eros", "porta"}
+
+func getSampleTextWords() []string {
+	filteredText := strings.Replace(sampleText, ".", "", -1)
+	filteredText = strings.Replace(filteredText, ",", "", -1)
+	return strings.Split(filteredText, " ")
+}
+
+var sampleWords = getSampleTextWords()
+
+func TestKeywordFESizeBlowup(t *testing.T) {
+	color.Yellow("Number of words: %d", len(sampleWords))
+
+	sum := 0
+	for w := range sampleWords {
+		sum += len([]byte(sampleWords[w]))
+	}
+
+	color.Yellow("Average word length plaintext (bytes): %f", float64(sum)/float64(len(sampleWords)))
+
+	_, pp := DefaultSetup()
+	encSum := 0
+	for _, t := range sampleWords {
+		ctxt, _ := MarshallCipherText(pp, pp.EncryptKeyword(t))
+		ctxtBytes, _ := base64.URLEncoding.DecodeString(ctxt.Unique())
+
+		encSum += len(ctxtBytes)
+	}
+
+	color.Yellow("[Encrypted] Average word length (bytes): %f", float64(encSum)/float64(len(sampleWords)))
+
+	color.Cyan("Blowup: %f", float64(encSum)/float64(sum))
+}
+
+func TestShowIBEKeyword(t *testing.T) {
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	color.Yellow("Sample Text")
+	fmt.Println(sampleText)
+	color.Yellow("Sample Keywords")
+	fmt.Println(sampleKeyWords)
+	color.Yellow(".\n.\n.\nBegin Searching:")
+
+	master, pp := DefaultSetup()
+
+	encryptedTokens := make([]CipherText, len(sampleWords))
+	for i, t := range sampleWords {
+		encryptedTokens[i] = pp.EncryptKeyword(t)
+	}
+
+	keywordSecretKeys := make([]PrivateKey, len(sampleKeyWords))
+	for i, t := range sampleKeyWords {
+		keywordSecretKeys[i] = master.Extract(t)
+	}
+
+	// extract
+
+	var foundCount = make([]int, len(keywordSecretKeys))
+	var done = make(chan bool)
+
+	extractor := func(i int, params PublicParams, sk PrivateKey) {
+		for _, v := range encryptedTokens {
+			if pp.DecryptAndCheck(sk, v) {
+				ctxt, _ := MarshallCipherText(pp, v)
+				vb64 := base64.URLEncoding.EncodeToString(SHA2(ctxt.Unique()))
+
+				fmt.Printf("Decrypted Keyword (%s) from Ciphertext (%s)\n", color.GreenString(sampleKeyWords[i]), color.YellowString(vb64))
+				foundCount[i]++
+			}
+		}
+
+		done <- true
+	}
+
+	for i, sk := range keywordSecretKeys {
+		go extractor(i, pp, sk)
+	}
+
+	for i := 0; i < len(keywordSecretKeys); i++ {
+		<-done
+	}
+
+	color.Cyan("Done!")
+
+	totals := ""
+	for i, k := range sampleKeyWords {
+		totals += fmt.Sprintf("%s: \t%d\n", k, foundCount[i])
+	}
+
+	color.Green("Extracted Keywords:\n%s", totals)
+
 }
 
 //MARK: Helpers

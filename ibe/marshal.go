@@ -323,3 +323,12 @@ func UnmarshalCipherText(params PublicParams, ser CipherTextSerialized) (ctxt Ci
 
 	return
 }
+
+//MARK: Unique
+func (sk PrivateKeySerialized) Unique() string {
+	return sk.D0 + sk.D1 + sk.D2 + sk.D3 + sk.D4
+}
+
+func (ctxt CipherTextSerialized) Unique() string {
+	return ctxt.C + ctxt.C0 + ctxt.C1 + ctxt.C2 + ctxt.C3 + ctxt.C4
+}
