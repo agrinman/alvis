@@ -49,14 +49,24 @@ func TestIBE(t *testing.T) {
 
 func TestMarshalMasterKey(t *testing.T) {
 	msk, _ := DefaultSetup()
-	fmt.Println("hello worldd")
 	res, err := MarshalMasterKey(msk)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	fmt.Println(string(res))
+	msk2, err := UnmarshalMasterKey(res)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if msk.Params.Params.String() != msk2.Params.Params.String() {
+		t.Error("Param strings don't match anymore")
+		return
+
+	}
+
 }
 
 // func TestIBEParallel(t *testing.T) {
