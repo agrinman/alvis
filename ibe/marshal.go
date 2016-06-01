@@ -2,7 +2,6 @@ package ibe
 
 import (
 	"encoding/base64"
-	"encoding/json"
 
 	"github.com/Nik-U/pbc"
 )
@@ -131,8 +130,8 @@ type MasterKeySerialized struct {
 	T4     string
 }
 
-func MarshalMasterKey(msk MasterKey) (result []byte, err error) {
-	ser := MasterKeySerialized{}
+func MarshalMasterKey(msk MasterKey) (ser MasterKeySerialized, err error) {
+	ser = MasterKeySerialized{}
 
 	ser.Params = msk.Params.ToSerialized()
 	ser.W = base64.URLEncoding.EncodeToString(msk.W.Bytes())
@@ -141,17 +140,10 @@ func MarshalMasterKey(msk MasterKey) (result []byte, err error) {
 	ser.T3 = base64.URLEncoding.EncodeToString(msk.T3.Bytes())
 	ser.T4 = base64.URLEncoding.EncodeToString(msk.T4.Bytes())
 
-	result, err = json.MarshalIndent(&ser, " ", "    ")
 	return
 }
 
-func UnmarshalMasterKey(data []byte) (msk MasterKey, err error) {
-	var ser MasterKeySerialized
-	err = json.Unmarshal(data, &ser)
-	if err != nil {
-		return
-	}
-
+func UnmarshalMasterKey(ser MasterKeySerialized) (msk MasterKey, err error) {
 	msk.Params, err = ser.Params.ToPublicParams()
 	if err != nil {
 		return
@@ -207,8 +199,8 @@ type PrivateKeySerialized struct {
 	D4     string
 }
 
-func MarshallPrivateKey(pp PublicParams, sk PrivateKey) (result []byte, err error) {
-	ser := PrivateKeySerialized{}
+func MarshallPrivateKey(pp PublicParams, sk PrivateKey) (ser PrivateKeySerialized, err error) {
+	ser = PrivateKeySerialized{}
 
 	ser.Params = pp.ToSerialized()
 	ser.D0 = base64.URLEncoding.EncodeToString(sk.D0.Bytes())
@@ -217,17 +209,10 @@ func MarshallPrivateKey(pp PublicParams, sk PrivateKey) (result []byte, err erro
 	ser.D3 = base64.URLEncoding.EncodeToString(sk.D3.Bytes())
 	ser.D4 = base64.URLEncoding.EncodeToString(sk.D4.Bytes())
 
-	result, err = json.MarshalIndent(&ser, " ", "    ")
 	return
 }
 
-func UnmarshalPrivateKey(params PublicParams, data []byte) (sk PrivateKey, err error) {
-	var ser PrivateKeySerialized
-	err = json.Unmarshal(data, &ser)
-	if err != nil {
-		return
-	}
-
+func UnmarshalPrivateKey(params PublicParams, ser PrivateKeySerialized) (sk PrivateKey, err error) {
 	pairing := params.Pairing
 
 	// W
@@ -278,8 +263,8 @@ type CipherTextSerialized struct {
 	C4 string
 }
 
-func MarshallCipherText(pp PublicParams, ctxt CipherText) (result []byte, err error) {
-	ser := CipherTextSerialized{}
+func MarshallCipherText(pp PublicParams, ctxt CipherText) (ser CipherTextSerialized, err error) {
+	ser = CipherTextSerialized{}
 
 	ser.C = base64.URLEncoding.EncodeToString(ctxt.C.Bytes())
 	ser.C0 = base64.URLEncoding.EncodeToString(ctxt.C0.Bytes())
@@ -288,17 +273,10 @@ func MarshallCipherText(pp PublicParams, ctxt CipherText) (result []byte, err er
 	ser.C3 = base64.URLEncoding.EncodeToString(ctxt.C3.Bytes())
 	ser.C4 = base64.URLEncoding.EncodeToString(ctxt.C4.Bytes())
 
-	result, err = json.MarshalIndent(&ser, " ", "    ")
 	return
 }
 
-func UnmarshalCipherText(params PublicParams, data []byte) (ctxt CipherText, err error) {
-	var ser CipherTextSerialized
-	err = json.Unmarshal(data, &ser)
-	if err != nil {
-		return
-	}
-
+func UnmarshalCipherText(params PublicParams, ser CipherTextSerialized) (ctxt CipherText, err error) {
 	pairing := params.Pairing
 
 	// C

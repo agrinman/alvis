@@ -148,17 +148,16 @@ func (msk MasterKey) Extract(id string) (sk PrivateKey) {
 }
 
 // Encrypt encrpyts to an id a message m
-func (pp PublicParams) Encrypt(id string, m []byte) (ctxt CipherText) {
+func (pp PublicParams) Encrypt(id string, m *pbc.Element) (ctxt CipherText) {
 	pbc.SetCryptoRandom()
 
 	pairing := pp.Pairing
 
 	idEl := pairing.NewZr().SetBytes(SHA2(id))
-	mG := pairing.NewGT().SetBytes(m)
 
 	s, s1, s2 := pairing.NewZr().Rand(), pairing.NewZr().Rand(), pairing.NewZr().Rand()
 
-	ctxt.C = pairing.NewGT().Mul(pairing.NewGT().PowZn(pp.O, s), mG)
+	ctxt.C = pairing.NewGT().Mul(pairing.NewGT().PowZn(pp.O, s), m)
 	ctxt.C0 = pairing.NewG1().PowZn(pairing.NewG1().Mul(pp.G0, pairing.NewG1().PowZn(pp.G1, idEl)), s)
 
 	ctxt.C1 = pairing.NewG1().PowZn(pp.V1, pairing.NewZr().Sub(s, s1))
@@ -170,7 +169,7 @@ func (pp PublicParams) Encrypt(id string, m []byte) (ctxt CipherText) {
 }
 
 // Encrypt encrpyts to an id a message m
-func (pp PublicParams) Decrypt(sk PrivateKey, ctxt CipherText) []byte {
+func (pp PublicParams) Decrypt(sk PrivateKey, ctxt CipherText) *pbc.Element {
 	pbc.SetCryptoRandom()
 
 	pairing := pp.Pairing
@@ -181,9 +180,21 @@ func (pp PublicParams) Decrypt(sk PrivateKey, ctxt CipherText) []byte {
 	e3 := pairing.NewGT().Pair(ctxt.C3, sk.D3)
 	e4 := pairing.NewGT().Pair(ctxt.C4, sk.D4)
 
-	mG := pairing.NewGT().Mul(ctxt.C, pairing.NewGT().Mul(e0, pairing.NewGT().Mul(e1, pairing.NewGT().Mul(e2, pairing.NewGT().Mul(e3, e4)))))
+	return pairing.NewGT().Mul(ctxt.C, pairing.NewGT().Mul(e0, pairing.NewGT().Mul(e1, pairing.NewGT().Mul(e2, pairing.NewGT().Mul(e3, e4)))))
+}
 
-	return mG.Bytes()
+//MARK: Convenience Encrypt/Decrypt
+
+const trueEl = "true"
+
+func (pp PublicParams) EncryptKeyword(id string) CipherText {
+	m := pp.Pairing.NewGT().SetFromStringHash(trueEl, sha256.New())
+	return pp.Encrypt(id, m)
+}
+
+func (pp PublicParams) DecryptAndCheck(sk PrivateKey, ctxt CipherText) bool {
+	mG := pp.Decrypt(sk, ctxt)
+	return pp.Pairing.NewGT().SetFromStringHash(trueEl, sha256.New()).Equals(mG)
 }
 
 //MARK: Helpers

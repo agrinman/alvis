@@ -22,9 +22,9 @@ func TestOnlyIBE(t *testing.T) {
 		sk := msk.Extract("feugiat")
 
 		m := pp.Pairing.NewGT().SetFromStringHash("true", sha256.New())
-		c := pp.Encrypt("feugiat", m.Bytes())
+		c := pp.Encrypt("feugiat", m)
 
-		ret := pp.Decrypt(sk, c)
+		ret := pp.Decrypt(sk, c).Bytes()
 
 		exp := m.Bytes()
 
@@ -38,12 +38,8 @@ func TestOnlyIBE(t *testing.T) {
 func TestIBEWithMarshal(t *testing.T) {
 
 	msk, pp := DefaultSetup()
-
-	pp, _ = pp.ToSerialized().ToPublicParams()
-
 	sk := msk.Extract("feugiat")
-	m := pp.Pairing.NewGT().SetFromStringHash("true", sha256.New())
-	c := pp.Encrypt("feugiat", m.Bytes())
+	c := pp.EncryptKeyword("feugiat")
 
 	// marhsall all
 	res_msk, err := MarshalMasterKey(msk)
@@ -83,12 +79,10 @@ func TestIBEWithMarshal(t *testing.T) {
 	}
 
 	// check it all works out
-	ret := msk2.Params.Decrypt(sk2, c2)
+	ret := msk2.Params.DecryptAndCheck(sk2, c2)
 
-	exp := m.Bytes()
-
-	if !checkResultFull(ret, exp) {
-		t.Errorf("Got back: %d. \nExpected %d", ret, exp)
+	if !ret {
+		t.Errorf("Got %d\nExpected %d", msk2.Params.Decrypt(sk2, c2).Bytes(), pp.Pairing.NewGT().SetFromStringHash("true", sha256.New()).Bytes())
 		return
 	}
 
@@ -112,7 +106,7 @@ func TestIBEWithMarshal(t *testing.T) {
 
 func BenchmarkIBEEncrypt(b *testing.B) {
 	_, pp := DefaultSetup()
-	m := pp.Pairing.NewGT().SetFromStringHash("true", sha256.New()).Bytes()
+	m := pp.Pairing.NewGT().SetFromStringHash("true", sha256.New())
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {

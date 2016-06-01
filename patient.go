@@ -7,20 +7,37 @@ import (
 	"io/ioutil"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode"
 
+	"github.com/agrinman/alvis/ibe"
+
 	"github.com/fatih/color"
-	IBE "github.com/vanadium/go.lib/ibe"
 )
 
 //MARK: Encryption/Decryption
-func EncryptAndSavePatientFile(inpath string, outpath string, master IBE.Master, freq FreqFEMasterKey) (err error) {
+func EncryptAndSavePatientFile(inpath string, outpath string, master ibe.MasterKey, freq FreqFEMasterKey) (err error) {
 	patient, err := readPatientFile(inpath)
 	encryptedPatient := ApplyCryptorToPatient(patient, func(freeText interface{}) interface{} {
 
 		tokens := SplitFreeText(freeText.(string))
-		color.Yellow("Begining KeywordFE Encryption with %d tokens...", len(tokens))
-		encryptedKeywordFETokens := GenCiphTokens(master, tokens)
+		numTokens := len(tokens)
+		color.Yellow("Begining KeywordFE Encryption with %d tokens...", numTokens)
+
+		encryptedKeywordFETokens := make([]ibe.CipherTextSerialized, numTokens)
+		var wg sync.WaitGroup
+		wg.Add(numTokens)
+		for i, t := range tokens {
+			go func(w *sync.WaitGroup, i int, t string) {
+				encryptedKeywordFETokens[i], err = ibe.MarshallCipherText(master.Params, master.Params.EncryptKeyword(t))
+				if err != nil {
+					fmt.Println("Found error while encrypting/serializing keyword: ", err)
+				}
+				w.Done()
+			}(&wg, i, t)
+		}
+		wg.Wait()
+
 		color.Yellow("Done with %d", len(tokens))
 
 		encryptedFreqFETokens := make([]string, len(tokens))
@@ -33,7 +50,7 @@ func EncryptAndSavePatientFile(inpath string, outpath string, master IBE.Master,
 			encryptedFreqFETokens[i] = base64.StdEncoding.EncodeToString(res)
 		}
 
-		resultMap := make(map[string][]string)
+		resultMap := make(map[string]interface{})
 		resultMap["keyword_enc"] = encryptedKeywordFETokens
 		resultMap["frequency_enc"] = encryptedFreqFETokens
 
@@ -44,7 +61,7 @@ func EncryptAndSavePatientFile(inpath string, outpath string, master IBE.Master,
 	return
 }
 
-func DecryptAndSavePatientFile(inpath string, outpath string, keywordKeys []IBE.PrivateKey, freqOuter []byte) (err error) {
+func DecryptAndSavePatientFile(inpath string, outpath string, keywordKeys []ibe.PrivateKey, freqOuter []byte) (err error) {
 	return
 }
 

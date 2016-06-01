@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"log"
 	"path"
@@ -11,9 +10,10 @@ import (
 	"io/ioutil"
 	"os"
 
+	"github.com/agrinman/alvis/ibe"
+
 	"github.com/fatih/color"
 	"github.com/urfave/cli"
-	IBE "github.com/vanadium/go.lib/ibe"
 
 	"net/http"
 	_ "net/http/pprof"
@@ -22,16 +22,16 @@ import (
 //MARK: Key types and parsing
 
 type MasterKey struct {
-	KeywordKey   KeyParams
+	KeywordKey   ibe.MasterKeySerialized
 	FrequencyKey FreqFEMasterKey
 }
 
 type KeyParams struct {
-	Key    string `json:"key"`
-	Params string `json:"params"`
+	Key    ibe.PrivateKeySerialized   `json:"key"`
+	Params ibe.PublicParamsSerialized `json:"params"`
 }
 
-func parseMasterKey(filepath string) (master IBE.Master, freq FreqFEMasterKey, err error) {
+func parseMasterKey(filepath string) (master ibe.MasterKey, freq FreqFEMasterKey, err error) {
 	mskBytes, err := ioutil.ReadFile(filepath)
 	if err != nil {
 		return
@@ -45,21 +45,7 @@ func parseMasterKey(filepath string) (master IBE.Master, freq FreqFEMasterKey, e
 	}
 
 	// ibe master
-	mskKey, err := base64.StdEncoding.DecodeString(msk.KeywordKey.Key)
-	if err != nil {
-		return
-	}
-	mskParams, err := base64.StdEncoding.DecodeString(msk.KeywordKey.Params)
-	if err != nil {
-		return
-	}
-
-	params, err := IBE.UnmarshalParams(mskParams)
-	if err != nil {
-		return
-	}
-
-	master, err = IBE.UnmarshalMasterKey(params, mskKey)
+	master, err = ibe.UnmarshalMasterKey(msk.KeywordKey)
 	if err != nil {
 		return
 	}
@@ -67,7 +53,7 @@ func parseMasterKey(filepath string) (master IBE.Master, freq FreqFEMasterKey, e
 	return master, msk.FrequencyKey, err
 }
 
-func parsePrivateKey(filepath string) (privateKey IBE.PrivateKey, err error) {
+func parsePrivateKey(filepath string) (privateKey ibe.PrivateKey, params ibe.PublicParams, err error) {
 	kpBytes, err := ioutil.ReadFile(filepath)
 	if err != nil {
 		return
@@ -80,22 +66,13 @@ func parsePrivateKey(filepath string) (privateKey IBE.PrivateKey, err error) {
 		return
 	}
 
-	// ibe master
-	kpKey, err := base64.StdEncoding.DecodeString(kp.Key)
-	if err != nil {
-		return
-	}
-	kpParams, err := base64.StdEncoding.DecodeString(kp.Params)
+	// ibe params + private
+	params, err = kp.Params.ToPublicParams()
 	if err != nil {
 		return
 	}
 
-	params, err := IBE.UnmarshalParams(kpParams)
-	if err != nil {
-		return
-	}
-
-	privateKey, err = IBE.UnmarshalPrivateKey(params, kpKey)
+	privateKey, err = ibe.UnmarshalPrivateKey(params, kp.Key)
 	if err != nil {
 		return
 	}
@@ -119,28 +96,15 @@ func genMaster(c *cli.Context) (err error) {
 	}
 
 	// setup ibe key
-	ibeMaster, err := IBE.SetupBB2()
-	if err != nil {
-		color.Red(err.Error())
-		return
-	}
+	ibeMaster, _ := ibe.DefaultSetup()
 
 	// marshall ibe master key
-	masterBytes, err := IBE.MarshalMasterKey(ibeMaster)
+	masterSer, err := ibe.MarshalMasterKey(ibeMaster)
 	if err != nil {
-		color.Red(err.Error())
 		return
 	}
-	masterB64 := base64.StdEncoding.EncodeToString(masterBytes)
 
-	paramsBytes, err := IBE.MarshalParams(ibeMaster.Params())
-	if err != nil {
-		color.Red(err.Error())
-		return
-	}
-	paramsB64 := base64.StdEncoding.EncodeToString(paramsBytes)
-
-	msk := MasterKey{KeyParams{masterB64, paramsB64}, freqMaster}
+	msk := MasterKey{masterSer, freqMaster}
 
 	outBytes, err := json.Marshal(msk)
 	if err != nil {
@@ -171,30 +135,18 @@ func genKeywordKey(c *cli.Context) (err error) {
 
 	// gen secret key
 	word := c.String("word")
-	secretKey, err := master.Extract(word)
-	if err != nil {
-		color.Red(err.Error())
-		return
-	}
+	secretKey := master.Extract(word)
 
 	// marshall secretKey and params
-	skBytes, err := IBE.MarshalPrivateKey(secretKey)
+	skSer, err := ibe.MarshallPrivateKey(master.Params, secretKey)
 	if err != nil {
 		color.Red(err.Error())
 		return
 	}
 
-	skB64 := base64.StdEncoding.EncodeToString(skBytes)
+	paramSer := master.Params.ToSerialized()
 
-	paramBytes, err := IBE.MarshalParams(secretKey.Params())
-	if err != nil {
-		color.Red(err.Error())
-		return
-	}
-
-	paramB64 := base64.StdEncoding.EncodeToString(paramBytes)
-
-	sk := KeyParams{skB64, paramB64}
+	sk := KeyParams{skSer, paramSer}
 
 	outBytes, err := json.Marshal(sk)
 	if err != nil {
@@ -312,7 +264,7 @@ func decrypt(c *cli.Context) (err error) {
 		return
 	}
 
-	var keywordKeys []IBE.PrivateKey
+	var keywordKeys []ibe.PrivateKey
 
 	switch mode := fi.Mode(); {
 	case mode.IsDir():
@@ -321,7 +273,7 @@ func decrypt(c *cli.Context) (err error) {
 			fpath := path.Join(keyDirPath, f.Name())
 
 			// try to parse as ibe.private key
-			privateKey, parseErr := parsePrivateKey(fpath)
+			privateKey, _, parseErr := parsePrivateKey(fpath)
 			if parseErr == nil {
 				keywordKeys = append(keywordKeys, privateKey)
 			} else {
