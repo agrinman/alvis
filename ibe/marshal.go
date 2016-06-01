@@ -50,7 +50,11 @@ func (ser PublicParamsSerialized) ToPublicParams() (pp PublicParams, err error) 
 		return
 	}
 
-	pp.Pairing = pp.Params.NewPairing()
+	pp.Pairing, err = pbc.NewPairingFromString(ser.Params)
+	if err != nil {
+		return
+	}
+
 	pairing := pp.Pairing
 
 	// G

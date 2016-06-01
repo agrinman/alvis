@@ -47,24 +47,77 @@ func TestIBE(t *testing.T) {
 	}
 }
 
-func TestMarshalMasterKey(t *testing.T) {
-	msk, _ := DefaultSetup()
-	res, err := MarshalMasterKey(msk)
+func TestIBEWithMarshal(t *testing.T) {
+
+	msk, pp := DefaultSetup()
+	sk := msk.Extract("feugiat")
+	m := []byte{0xAA}
+	c := pp.Encrypt("feugiat", m)
+
+	// marhsall all
+	res_msk, err := MarshalMasterKey(msk)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	res_sk, err := MarshallPrivateKey(pp, sk)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	res_ctxt, err := MarshallCipherText(pp, c)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	msk2, err := UnmarshalMasterKey(res)
+	fmt.Println(string(res_msk))
+	fmt.Println(string(res_sk))
+	fmt.Println(string(res_ctxt))
+
+	// unmarhsal all
+
+	_, err = UnmarshalMasterKey(res_msk)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	if msk.Params.Params.String() != msk2.Params.Params.String() {
-		t.Error("Param strings don't match anymore")
+	_, _, err = UnmarshalPrivateKey(res_sk)
+	if err != nil {
+		t.Error(err)
 		return
+	}
 
+	_, err = UnmarshalCipherText(pp, res_ctxt)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	// check it all works out
+	ret := msk.Params.Decrypt(sk, c)
+
+	exp := pp.ValBytes(m)
+	if len(exp) != len(ret) {
+		t.Errorf("Got back: %d. \nExpected %d", ret, exp)
+		return
+	}
+
+	success := true
+	last := 0
+	for i := range ret {
+		last = i
+
+		if ret[i] != exp[i] {
+			success = false
+			break
+		}
+	}
+
+	if !success {
+		t.Errorf("Error at byte %d.\nGot back: %d. \nExpected %d", last, ret, exp)
+		return
 	}
 
 }
