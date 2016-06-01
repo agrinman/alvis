@@ -1,6 +1,7 @@
 package ibe
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"runtime"
@@ -14,45 +15,35 @@ func TestMain(m *testing.M) {
 }
 
 // TestGenAndEval tests functionality
-func TestIBE(t *testing.T) {
-	msk, pp := DefaultSetup()
-	sk := msk.Extract("feugiat")
+func TestOnlyIBE(t *testing.T) {
+	fmt.Println("Run 10 times...")
+	for i := 0; i < 10; i++ {
+		msk, pp := DefaultSetup()
+		sk := msk.Extract("feugiat")
 
-	m := []byte{0xAA}
-	c := pp.Encrypt("feugiat", m)
+		m := pp.Pairing.NewGT().SetFromStringHash("true", sha256.New())
+		c := pp.Encrypt("feugiat", m.Bytes())
 
-	ret := pp.Decrypt(sk, c)
-	fmt.Println()
+		ret := pp.Decrypt(sk, c)
 
-	exp := pp.ValBytes(m)
-	if len(exp) != len(ret) {
-		t.Errorf("Got back: %d. \nExpected %d", ret, exp)
-		return
-	}
+		exp := m.Bytes()
 
-	success := true
-	last := 0
-	for i := range ret {
-		last = i
-
-		if ret[i] != exp[i] {
-			success = false
-			break
+		if !checkResultFull(ret, exp) {
+			t.Errorf("Got back: %d. \nExpected %d", ret, exp)
+			return
 		}
-	}
-
-	if !success {
-		t.Errorf("Error at byte %d.\nGot back: %d. \nExpected %d", last, ret, exp)
-		return
 	}
 }
 
 func TestIBEWithMarshal(t *testing.T) {
 
 	msk, pp := DefaultSetup()
+
+	pp, _ = pp.ToSerialized().ToPublicParams()
+
 	sk := msk.Extract("feugiat")
-	m := []byte{0xAA}
-	c := pp.Encrypt("feugiat", m)
+	m := pp.Pairing.NewGT().SetFromStringHash("true", sha256.New())
+	c := pp.Encrypt("feugiat", m.Bytes())
 
 	// marhsall all
 	res_msk, err := MarshalMasterKey(msk)
@@ -71,52 +62,33 @@ func TestIBEWithMarshal(t *testing.T) {
 		return
 	}
 
-	fmt.Println(string(res_msk))
-	fmt.Println(string(res_sk))
-	fmt.Println(string(res_ctxt))
-
 	// unmarhsal all
 
-	_, err = UnmarshalMasterKey(res_msk)
+	msk2, err := UnmarshalMasterKey(res_msk)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	_, _, err = UnmarshalPrivateKey(res_sk)
+	sk2, err := UnmarshalPrivateKey(msk2.Params, res_sk)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	_, err = UnmarshalCipherText(pp, res_ctxt)
+	c2, err := UnmarshalCipherText(msk2.Params, res_ctxt)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
 	// check it all works out
-	ret := msk.Params.Decrypt(sk, c)
+	ret := msk2.Params.Decrypt(sk2, c2)
 
-	exp := pp.ValBytes(m)
-	if len(exp) != len(ret) {
+	exp := m.Bytes()
+
+	if !checkResultFull(ret, exp) {
 		t.Errorf("Got back: %d. \nExpected %d", ret, exp)
-		return
-	}
-
-	success := true
-	last := 0
-	for i := range ret {
-		last = i
-
-		if ret[i] != exp[i] {
-			success = false
-			break
-		}
-	}
-
-	if !success {
-		t.Errorf("Error at byte %d.\nGot back: %d. \nExpected %d", last, ret, exp)
 		return
 	}
 
@@ -140,9 +112,37 @@ func TestIBEWithMarshal(t *testing.T) {
 
 func BenchmarkIBEEncrypt(b *testing.B) {
 	_, pp := DefaultSetup()
+	m := pp.Pairing.NewGT().SetFromStringHash("true", sha256.New()).Bytes()
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		_ = pp.Encrypt("feugiatfeugiatfeugiatfeugiat", []byte{0x01})
+		_ = pp.Encrypt("feugiatfeugiatfeugiatfeugiat", m)
 	}
+}
+
+//MARK: Helpers
+
+func checkResult(got []byte, exp []byte) bool {
+	if got[0] != exp[0] {
+		return false
+	}
+
+	return true
+}
+
+func checkResultFull(got []byte, exp []byte) bool {
+	if len(got) != len(exp) {
+		return false
+	}
+
+	success := true
+	for i := range got {
+
+		if got[i] != exp[i] {
+			success = false
+			break
+		}
+	}
+
+	return success
 }

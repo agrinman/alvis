@@ -2,7 +2,6 @@ package ibe
 
 import (
 	"crypto/sha256"
-	"fmt"
 
 	"github.com/Nik-U/pbc"
 )
@@ -33,7 +32,7 @@ type MasterKey struct {
 
 type PublicParams struct {
 	Params  *pbc.Params
-	R, Q    uint32
+	R, Q    int
 	Pairing *pbc.Pairing
 
 	O *pbc.Element
@@ -74,13 +73,13 @@ func DefaultSetup() (MasterKey, PublicParams) {
 }
 
 // Setup initializaes the MSK and PP
-func Setup(r uint32, q uint32) (msk MasterKey, pp PublicParams) {
+func Setup(r int, q int) (msk MasterKey, pp PublicParams) {
 	pbc.SetCryptoRandom()
 
 	msk = MasterKey{}
 	pp = PublicParams{R: r, Q: q}
 
-	pp.Params = pbc.GenerateA(r, q)
+	pp.Params = pbc.GenerateA(uint32(r), uint32(q))
 	pp.Pairing = pp.Params.NewPairing()
 
 	pairing := pp.Pairing
@@ -156,8 +155,6 @@ func (pp PublicParams) Encrypt(id string, m []byte) (ctxt CipherText) {
 
 	idEl := pairing.NewZr().SetBytes(SHA2(id))
 	mG := pairing.NewGT().SetBytes(m)
-
-	fmt.Println(len(mG.Bytes()))
 
 	s, s1, s2 := pairing.NewZr().Rand(), pairing.NewZr().Rand(), pairing.NewZr().Rand()
 
