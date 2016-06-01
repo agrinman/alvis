@@ -16,3 +16,6 @@
 [submodule "vendor/github.com/vanadium/go.lib"]
 	path = vendor/github.com/vanadium/go.lib
 	url = git://github.com/vanadium/go.lib
+[submodule "ibe/vendor/github.com/Nik-U/pbc"]
+	path = ibe/vendor/github.com/Nik-U/pbc
+	url = git://github.com/Nik-U/pbc
