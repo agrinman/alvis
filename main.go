@@ -53,7 +53,7 @@ func parseMasterKey(filepath string) (master ibe.MasterKey, freq FreqFEMasterKey
 	return master, msk.FrequencyKey, err
 }
 
-func parsePrivateKey(filepath string) (privateKey ibe.PrivateKey, params ibe.PublicParams, err error) {
+func parseParams(filepath string) (params ibe.PublicParams, err error) {
 	kpBytes, err := ioutil.ReadFile(filepath)
 	if err != nil {
 		return
@@ -66,8 +66,20 @@ func parsePrivateKey(filepath string) (privateKey ibe.PrivateKey, params ibe.Pub
 		return
 	}
 
-	// ibe params + private
 	params, err = kp.Params.ToPublicParams()
+
+	return
+}
+
+func parsePrivateKey(params ibe.PublicParams, filepath string) (privateKey ibe.PrivateKey, err error) {
+	kpBytes, err := ioutil.ReadFile(filepath)
+	if err != nil {
+		return
+	}
+
+	// unmarshall master secret
+	var kp KeyParams
+	err = json.Unmarshal(kpBytes, &kp)
 	if err != nil {
 		return
 	}
@@ -269,6 +281,10 @@ func decrypt(c *cli.Context) (err error) {
 	switch mode := fi.Mode(); {
 	case mode.IsDir():
 		files, _ := ioutil.ReadDir(keyDirPath)
+		if len(files) == 0 {
+			color.Red("No keys found in key dir %s", keyDirPath)
+			return
+		}
 		for _, f := range files {
 			fpath := path.Join(keyDirPath, f.Name())
 
