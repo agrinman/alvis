@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,12 +25,12 @@ func EncryptAndSavePatientFile(inpath string, outpath string, master ibe.MasterK
 		numTokens := len(tokens)
 		color.Yellow("Begining KeywordFE Encryption with %d tokens...", numTokens)
 
-		encryptedKeywordFETokens := make([]ibe.CipherTextSerialized, numTokens)
+		encryptedKeywordFETokens := make([]string, numTokens)
 		var wg sync.WaitGroup
 		wg.Add(numTokens)
 		for i, t := range tokens {
 			go func(w *sync.WaitGroup, i int, t string) {
-				encryptedKeywordFETokens[i], err = ibe.MarshallCipherText(master.Params, master.Params.EncryptKeyword(t))
+				encryptedKeywordFETokens[i], err = ibe.MarshalCipherTextBase64(master.Params.EncryptKeyword(t))
 				if err != nil {
 					fmt.Println("Found error while encrypting/serializing keyword: ", err)
 				}
@@ -47,7 +48,7 @@ func EncryptAndSavePatientFile(inpath string, outpath string, master ibe.MasterK
 			if resErr != nil {
 				return resErr
 			}
-			encryptedFreqFETokens[i] = base64.StdEncoding.EncodeToString(res)
+			encryptedFreqFETokens[i] = base64.URLEncoding.EncodeToString(res)
 		}
 
 		resultMap := make(map[string]interface{})
@@ -61,7 +62,79 @@ func EncryptAndSavePatientFile(inpath string, outpath string, master ibe.MasterK
 	return
 }
 
-func DecryptAndSavePatientFile(inpath string, outpath string, keywordKeys []ibe.PrivateKey, freqOuter []byte) (err error) {
+func DecryptAndSavePatientFile(inpath string, outpath string, params ibe.PublicParams, keywordKeys []ibe.PrivateKey, freqOuter []byte) (err error) {
+
+	patient, err := readPatientFile(inpath)
+	decryptedPatient := ApplyCryptorToPatient(patient, func(encryptedMap interface{}) interface{} {
+
+		inMap := encryptedMap.(map[string]interface{})
+		encryptedKeywordFETokens := inMap["keyword_enc"].([]string)
+		encryptedFreqFETokens := inMap["frequency_enc"].([]string)
+
+		if len(encryptedFreqFETokens) != len(encryptedKeywordFETokens) {
+			color.Red("Fatal: Keyword / Frequency encrypted token lists have different lengths.")
+			os.Exit(1)
+		}
+
+		numTokens := len(encryptedFreqFETokens)
+
+		// run in parallel
+		var wg sync.WaitGroup
+		wg.Add(2 * numTokens)
+
+		// start by decrypting freq enc first
+		color.Yellow("Begining Freq Decryption Phase: %d tokens...", numTokens)
+
+		decryptedTokens := make([]string, len(encryptedFreqFETokens))
+
+		for i, t := range encryptedFreqFETokens {
+			go func(w *sync.WaitGroup, i int, t string) {
+				tbytes, errB64 := base64.URLEncoding.DecodeString(t)
+				if errB64 != nil {
+					color.Red("Cannot decode base64: %s", t)
+				}
+
+				decryptedToken, errDecr := AESDecrypt(freqOuter, tbytes)
+				if errDecr != nil {
+					color.Red("Cannot decrypt bytes: %d", tbytes)
+				}
+
+				decryptedTokens[i] = string(decryptedToken)
+				w.Done()
+			}(&wg, i, t)
+		}
+
+		color.Yellow("Done Freq Decryption Phase. Decrypted %d tokens.", numTokens)
+
+		// next do keyword fe decryptions
+		color.Yellow("Begining KeywordFE Decryption with %d tokens...", numTokens)
+
+		for i, ctxtString := range encryptedKeywordFETokens {
+			go func(w *sync.WaitGroup, i int, ctxtString string) {
+
+				ctxt, errUnmarsh := ibe.UnmarshalCipherTextBase64(params, ctxtString)
+				if errUnmarsh != nil {
+					color.Red("Cannot unmarshall cipher text: %s. Error: ", ctxt, errUnmarsh)
+					w.Done()
+					return
+				}
+
+				for _, sk := range keywordKeys {
+					if params.DecryptAndCheck(sk, ctxt) {
+						color.Magenta("Decrypted keyword successfully: ", sk.Keyword)
+						decryptedTokens[i] = sk.Keyword
+					}
+				}
+				w.Done()
+			}(&wg, i, ctxtString)
+		}
+		wg.Wait()
+
+		color.Yellow("Done Keyword Decryption Phase for %d tokens.", numTokens)
+		return strings.Join(decryptedTokens, " ")
+	})
+
+	err = writePatient(decryptedPatient, outpath)
 	return
 }
 

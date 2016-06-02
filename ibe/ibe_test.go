@@ -56,12 +56,11 @@ func TestIBEWithMarshal(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	res_ctxt, err := MarshallCipherText(pp, c)
+	res_ctxt, err := MarshalCipherTextBase64(c)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-
 	// unmarhsal all
 
 	msk2, err := UnmarshalMasterKey(res_msk)
@@ -76,7 +75,7 @@ func TestIBEWithMarshal(t *testing.T) {
 		return
 	}
 
-	c2, err := UnmarshalCipherText(msk2.Params, res_ctxt)
+	c2, err := UnmarshalCipherTextBase64(msk2.Params, res_ctxt)
 	if err != nil {
 		t.Error(err)
 		return
@@ -145,8 +144,8 @@ func TestKeywordFESizeBlowup(t *testing.T) {
 	_, pp := DefaultSetup()
 	encSum := 0
 	for _, t := range sampleWords {
-		ctxt, _ := MarshallCipherText(pp, pp.EncryptKeyword(t))
-		ctxtBytes, _ := base64.URLEncoding.DecodeString(ctxt.Unique())
+		ctxt, _ := MarshalCipherTextBase64(pp.EncryptKeyword(t))
+		ctxtBytes, _ := base64.URLEncoding.DecodeString(ctxt)
 
 		encSum += len(ctxtBytes)
 	}

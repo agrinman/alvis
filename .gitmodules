@@ -19,3 +19,6 @@
 [submodule "ibe/vendor/github.com/Nik-U/pbc"]
 	path = ibe/vendor/github.com/Nik-U/pbc
 	url = git://github.com/Nik-U/pbc
+[submodule "vendor/github.com/agrinman/alvis"]
+	path = vendor/github.com/agrinman/alvis
+	url = git://github.com/agrinman/alvis

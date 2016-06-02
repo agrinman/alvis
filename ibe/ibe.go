@@ -48,11 +48,12 @@ type PublicParams struct {
 }
 
 type PrivateKey struct {
-	D0 *pbc.Element
-	D1 *pbc.Element
-	D2 *pbc.Element
-	D3 *pbc.Element
-	D4 *pbc.Element
+	Keyword string
+	D0      *pbc.Element
+	D1      *pbc.Element
+	D2      *pbc.Element
+	D3      *pbc.Element
+	D4      *pbc.Element
 }
 
 type CipherText struct {
@@ -110,6 +111,8 @@ func Setup(r int, q int) (msk MasterKey, pp PublicParams) {
 // Encrypt encrpyts to an id a message m
 func (msk MasterKey) Extract(id string) (sk PrivateKey) {
 	pbc.SetCryptoRandom()
+
+	sk.Keyword = id
 
 	pp := msk.Params
 	pairing := pp.Pairing

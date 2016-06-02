@@ -191,18 +191,20 @@ func UnmarshalMasterKey(ser MasterKeySerialized) (msk MasterKey, err error) {
 
 //MARK: Private Key
 type PrivateKeySerialized struct {
-	Params PublicParamsSerialized
-	D0     string
-	D1     string
-	D2     string
-	D3     string
-	D4     string
+	Params  PublicParamsSerialized
+	Keyword string
+	D0      string
+	D1      string
+	D2      string
+	D3      string
+	D4      string
 }
 
 func MarshallPrivateKey(pp PublicParams, sk PrivateKey) (ser PrivateKeySerialized, err error) {
 	ser = PrivateKeySerialized{}
-
+	ser.Keyword = sk.Keyword
 	ser.Params = pp.ToSerialized()
+
 	ser.D0 = base64.URLEncoding.EncodeToString(sk.D0.Bytes())
 	ser.D1 = base64.URLEncoding.EncodeToString(sk.D1.Bytes())
 	ser.D2 = base64.URLEncoding.EncodeToString(sk.D2.Bytes())
@@ -214,6 +216,8 @@ func MarshallPrivateKey(pp PublicParams, sk PrivateKey) (ser PrivateKeySerialize
 
 func UnmarshalPrivateKey(params PublicParams, ser PrivateKeySerialized) (sk PrivateKey, err error) {
 	pairing := params.Pairing
+
+	sk.Keyword = ser.Keyword
 
 	// W
 	D0, err := base64.URLEncoding.DecodeString(ser.D0)
@@ -320,6 +324,74 @@ func UnmarshalCipherText(params PublicParams, ser CipherTextSerialized) (ctxt Ci
 		return
 	}
 	ctxt.C4 = pairing.NewG1().SetBytes(C4)
+
+	return
+}
+
+func MarshalCipherTextBase64(ctxt CipherText) (result string, err error) {
+
+	bytesLen := ctxt.C.BytesLen() + ctxt.C0.BytesLen() + ctxt.C1.BytesLen() + ctxt.C2.BytesLen() + ctxt.C3.BytesLen() + ctxt.C4.BytesLen()
+
+	ctxtBytes := make([]byte, bytesLen)
+
+	count := 0
+	copy(ctxtBytes[count:count+ctxt.C.BytesLen()], ctxt.C.Bytes())
+	count += ctxt.C.BytesLen()
+
+	copy(ctxtBytes[count:count+ctxt.C0.BytesLen()], ctxt.C0.Bytes())
+	count += ctxt.C0.BytesLen()
+
+	copy(ctxtBytes[count:count+ctxt.C1.BytesLen()], ctxt.C1.Bytes())
+	count += ctxt.C1.BytesLen()
+
+	copy(ctxtBytes[count:count+ctxt.C2.BytesLen()], ctxt.C2.Bytes())
+	count += ctxt.C2.BytesLen()
+
+	copy(ctxtBytes[count:count+ctxt.C3.BytesLen()], ctxt.C3.Bytes())
+	count += ctxt.C3.BytesLen()
+
+	copy(ctxtBytes[count:count+ctxt.C2.BytesLen()], ctxt.C4.Bytes())
+	count += ctxt.C4.BytesLen()
+
+	result = base64.URLEncoding.EncodeToString(ctxtBytes)
+
+	return
+}
+
+func UnmarshalCipherTextBase64(params PublicParams, ctxtString string) (ctxt CipherText, err error) {
+
+	ctxtBytes, err := base64.URLEncoding.DecodeString(ctxtString)
+	if err != nil {
+		return
+	}
+
+	blockSize := 128
+	count := 0
+
+	pairing := params.Pairing
+
+	// C
+	ctxt.C = pairing.NewGT().SetBytes(ctxtBytes[count : count+blockSize])
+	count += blockSize
+
+	// C0
+	ctxt.C0 = pairing.NewG1().SetBytes(ctxtBytes[count : count+blockSize])
+	count += blockSize
+
+	//C1
+	ctxt.C1 = pairing.NewG1().SetBytes(ctxtBytes[count : count+blockSize])
+	count += blockSize
+
+	//C2
+	ctxt.C2 = pairing.NewG1().SetBytes(ctxtBytes[count : count+blockSize])
+	count += blockSize
+
+	//C3
+	ctxt.C3 = pairing.NewG1().SetBytes(ctxtBytes[count : count+blockSize])
+	count += blockSize
+
+	//C4
+	ctxt.C4 = pairing.NewG1().SetBytes(ctxtBytes[count : count+blockSize])
 
 	return
 }
