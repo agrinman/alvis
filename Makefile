@@ -1,7 +1,4 @@
-GODEBUG := cgocheck=0
-export GODEBUG
-
-@echo @GODEBUG
+# To do: put envars. for build version, build time, and default settings# To do: put envars. for build version, build time, and default settings# To do: put envars. for build version, build time, and default settings
 build:
 	go build
 

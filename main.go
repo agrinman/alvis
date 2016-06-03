@@ -278,19 +278,28 @@ func decrypt(c *cli.Context) (err error) {
 	}
 
 	var keywordKeys []ibe.PrivateKey
+	var params ibe.PublicParams
+	var errParams error
 
 	switch mode := fi.Mode(); {
 	case mode.IsDir():
 		files, _ := ioutil.ReadDir(keyDirPath)
 		if len(files) == 0 {
-			color.Red("No keys found in key dir %s", keyDirPath)
+			color.Yellow("No functional keyword keys found in key dir %s. Skipping keyword decryptions.", keyDirPath)
+			break
+		}
+
+		params, errParams = parseParams(path.Join(keyDirPath, files[0].Name()))
+		if errParams != nil {
+			color.Red("Could not read system parameters. Invalid keword functional key: %s. Error: %s", path.Join(keyDirPath, files[0].Name()), errParams)
 			return
 		}
+		//read all keys
 		for _, f := range files {
 			fpath := path.Join(keyDirPath, f.Name())
 
 			// try to parse as ibe.private key
-			privateKey, _, parseErr := parsePrivateKey(fpath)
+			privateKey, parseErr := parsePrivateKey(params, fpath)
 			if parseErr == nil {
 				keywordKeys = append(keywordKeys, privateKey)
 			} else {
@@ -298,7 +307,7 @@ func decrypt(c *cli.Context) (err error) {
 			}
 		}
 	case mode.IsRegular():
-		color.Red("Error '-key-dir' was given a file. expected a directory.")
+		color.Red("Error: '-key-dir' was given a file. Expected directory.")
 		return
 	}
 
@@ -324,7 +333,7 @@ func decrypt(c *cli.Context) (err error) {
 			in := path.Join(patientDirPath, f.Name())
 			out := path.Join(outPath, strings.Replace(f.Name(), ".enc", "", 1))
 
-			err = DecryptAndSavePatientFile(in, out, keywordKeys, freqOuterKey)
+			err = DecryptAndSavePatientFile(in, out, params, keywordKeys, freqOuterKey)
 			if err != nil {
 				color.Red("Cannot EncryptAndSavePatientFile: %s", err)
 				return
@@ -341,14 +350,12 @@ func decrypt(c *cli.Context) (err error) {
 //MARK: CLI
 func main() {
 	// set procs -1
-	runtime.GOMAXPROCS(runtime.NumCPU() - 1)
+	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	// for pprof
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
-
-	ibe.DefaultSetup()
 
 	// cli app
 	app := cli.NewApp()
