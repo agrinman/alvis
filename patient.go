@@ -26,18 +26,12 @@ func EncryptAndSavePatientFile(inpath string, outpath string, master ibe.MasterK
 		color.Yellow("Begining KeywordFE Encryption with %d tokens...", numTokens)
 
 		encryptedKeywordFETokens := make([]string, numTokens)
-		var wg sync.WaitGroup
-		wg.Add(numTokens)
 		for i, t := range tokens {
-			go func(w *sync.WaitGroup, i int, t string) {
-				encryptedKeywordFETokens[i], err = ibe.MarshalCipherTextBase64(master.Params.EncryptKeyword(t))
-				if err != nil {
-					fmt.Println("Found error while encrypting/serializing keyword: ", err)
-				}
-				w.Done()
-			}(&wg, i, t)
+			encryptedKeywordFETokens[i], err = ibe.MarshalCipherTextBase64(master.Params.EncryptKeyword(t))
+			if err != nil {
+				fmt.Println("Found error while encrypting/serializing keyword: ", err)
+			}
 		}
-		wg.Wait()
 
 		color.Yellow("Done with %d", len(tokens))
 
@@ -67,68 +61,71 @@ func DecryptAndSavePatientFile(inpath string, outpath string, params ibe.PublicP
 	patient, err := readPatientFile(inpath)
 	decryptedPatient := ApplyCryptorToPatient(patient, func(encryptedMap interface{}) interface{} {
 
-		inMap := encryptedMap.(map[string]interface{})
-		encryptedKeywordFETokens := inMap["keyword_enc"].([]string)
-		encryptedFreqFETokens := inMap["frequency_enc"].([]string)
+		inMap, ok := encryptedMap.(map[string]interface{})
+		if !ok {
+			fmt.Println("Unexpected type: ", encryptedMap)
+		}
+
+		encryptedKeywordFETokens := inMap["keyword_enc"].([]interface{})
+		encryptedFreqFETokens := inMap["frequency_enc"].([]interface{})
 
 		if len(encryptedFreqFETokens) != len(encryptedKeywordFETokens) {
 			color.Red("Fatal: Keyword / Frequency encrypted token lists have different lengths.")
-			os.Exit(1)
+			os.Exit(2)
 		}
 
 		numTokens := len(encryptedFreqFETokens)
 
 		// run in parallel
-		var wg sync.WaitGroup
-		wg.Add(2 * numTokens)
+		// var wg sync.WaitGroup
+		// wg.Add(2 * numTokens)
 
 		// start by decrypting freq enc first
-		color.Yellow("Begining Freq Decryption Phase: %d tokens...", numTokens)
 
 		decryptedTokens := make([]string, len(encryptedFreqFETokens))
 
 		for i, t := range encryptedFreqFETokens {
-			go func(w *sync.WaitGroup, i int, t string) {
-				tbytes, errB64 := base64.URLEncoding.DecodeString(t)
-				if errB64 != nil {
-					color.Red("Cannot decode base64: %s", t)
-				}
+			// go func(w *sync.WaitGroup, i int, t string) {
+			tbytes, errB64 := base64.URLEncoding.DecodeString(t.(string))
+			if errB64 != nil {
+				color.Red("Cannot decode base64: %s", t)
+			}
 
-				decryptedToken, errDecr := AESDecrypt(freqOuter, tbytes)
-				if errDecr != nil {
-					color.Red("Cannot decrypt bytes: %d", tbytes)
-				}
+			decryptedToken, errDecr := AESDecrypt(freqOuter, tbytes)
+			if errDecr != nil {
+				color.Red("Cannot decrypt bytes: %d", tbytes)
+			}
 
-				decryptedTokens[i] = string(decryptedToken)
-				w.Done()
-			}(&wg, i, t)
+			decryptedTokens[i] = string(decryptedToken)
+			// 	w.Done()
+			// }(&wg, i, t)
 		}
 
-		color.Yellow("Done Freq Decryption Phase. Decrypted %d tokens.", numTokens)
+		color.Yellow("Frequency phase done: %d tokens.", numTokens)
 
 		// next do keyword fe decryptions
 		color.Yellow("Begining KeywordFE Decryption with %d tokens...", numTokens)
 
 		for i, ctxtString := range encryptedKeywordFETokens {
-			go func(w *sync.WaitGroup, i int, ctxtString string) {
+			// go func(w *sync.WaitGroup, i int, ctxtString string) {
 
-				ctxt, errUnmarsh := ibe.UnmarshalCipherTextBase64(params, ctxtString)
-				if errUnmarsh != nil {
-					color.Red("Cannot unmarshall cipher text: %s. Error: ", ctxt, errUnmarsh)
-					w.Done()
-					return
-				}
+			ctxt, errUnmarsh := ibe.UnmarshalCipherTextBase64(params, ctxtString.(string))
+			if errUnmarsh != nil {
+				color.Red("Cannot unmarshall cipher text: %s. Error: ", ctxt, errUnmarsh)
+				// w.Done()
+				// return
+			}
 
-				for _, sk := range keywordKeys {
-					if params.DecryptAndCheck(sk, ctxt) {
-						color.Magenta("Decrypted keyword successfully: ", sk.Keyword)
-						decryptedTokens[i] = sk.Keyword
-					}
+			for _, sk := range keywordKeys {
+				if params.DecryptAndCheck(sk, ctxt) {
+					color.Magenta("Decrypted keyword successfully: %s", sk.Keyword)
+					decryptedTokens[i] = sk.Keyword
 				}
-				w.Done()
-			}(&wg, i, ctxtString)
+			}
+			// 	w.Done()
+			// }(&wg, i, ctxtString)
 		}
-		wg.Wait()
+		// wg.Wait()
 
 		color.Yellow("Done Keyword Decryption Phase for %d tokens.", numTokens)
 		return strings.Join(decryptedTokens, " ")
@@ -163,33 +160,28 @@ func ApplyCryptorToPatient(patient map[string]interface{}, cryptor func(interfac
 	lnoNotes, _ := patient["Lno"].([]interface{})
 	newLnoNotes := make([]map[string]interface{}, len(lnoNotes))
 
-	// var wg sync.WaitGroup
-	// wg.Add(len(cardiacNotes) + len(lnoNotes))
+	fmt.Println(len(cardiacNotes) + len(lnoNotes))
+	var wg sync.WaitGroup
+	wg.Add(len(cardiacNotes) + len(lnoNotes))
 
 	for i := range cardiacNotes {
 		note := cardiacNotes[i].(map[string]interface{})
-		note["free_text"] = cryptor(note["free_text"])
-		newCarNotes[i] = note
-
-		// go func(w *sync.WaitGroup, i int, note map[string]interface{}) {
-		// 	note["free_text"] = cryptor(note["free_text"])
-		// 	newCarNotes[i] = note
-		// 	w.Done()
-		// }(&wg, i, note)
+		go func(w *sync.WaitGroup, i int, note map[string]interface{}) {
+			note["free_text"] = cryptor(note["free_text"])
+			newCarNotes[i] = note
+			w.Done()
+		}(&wg, i, note)
 	}
 
 	for i := range lnoNotes {
 		note := lnoNotes[i].(map[string]interface{})
-		note["free_text"] = cryptor(note["free_text"])
-		newLnoNotes[i] = note
-
-		// go func(w *sync.WaitGroup, i int, note map[string]interface{}) {
-		// 	note["free_text"] = cryptor(note["free_text"])
-		// 	newLnoNotes[i] = note
-		// 	w.Done()
-		// }(&wg, i, note)
+		go func(w *sync.WaitGroup, i int, note map[string]interface{}) {
+			note["free_text"] = cryptor(note["free_text"])
+			newLnoNotes[i] = note
+			w.Done()
+		}(&wg, i, note)
 	}
-	// wg.Wait()
+	wg.Wait()
 
 	patient["Car"] = newCarNotes
 	patient["Lno"] = newLnoNotes

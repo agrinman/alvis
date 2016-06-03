@@ -177,8 +177,8 @@ func genKeywordKey(c *cli.Context) (err error) {
 }
 
 func genFrequencyKey(c *cli.Context) (err error) {
-	if c.NumFlags() < 3 {
-		color.Red("Missing 'msk' for path to master secret key OR '-word' for the keyword OR '-out' flag for filepath of search keyword secret key")
+	if c.NumFlags() < 2 {
+		color.Red("Missing one of: \n\t-msk for path to master secret key \n\t-out flag for filepath of search keyword secret key")
 		return
 	}
 
@@ -204,7 +204,7 @@ func genFrequencyKey(c *cli.Context) (err error) {
 
 func encrypt(c *cli.Context) (err error) {
 	if c.NumFlags() < 3 {
-		color.Red("Missing 'msk' for path to master secret key OR '-patient-dir' for directory of patient files OR '-out-dir' for the directory of the encrypted patient files")
+		color.Red("Missing one of: \n\t-msk for path to master secret key \n\t-patient-dir for directory of patient files \n\t-out-dir for the directory of the encrypted patient files")
 		return
 	}
 
@@ -254,8 +254,8 @@ func encrypt(c *cli.Context) (err error) {
 }
 
 func decrypt(c *cli.Context) (err error) {
-	if c.NumFlags() < 3 {
-		color.Red("Missing 'key-dir' for directory path to functional keys key OR '-freq-key' for path to the frequency decryption key file OR '-patient-dir' for directory of patient files OR '-out-dir' for the where to write the partially-decrypted patient files")
+	if c.NumFlags() < 4 {
+		color.Red("Missing one or more args: \n\t-key-dir for directory path to functional keys \n\t-freq-key for path to the frequency decryption key file \n\t-patient-dir for directory of patient files \n\t-out-dir for the where to write the partially-decrypted patient files")
 		return
 	}
 
@@ -294,6 +294,7 @@ func decrypt(c *cli.Context) (err error) {
 			color.Red("Could not read system parameters. Invalid keword functional key: %s. Error: %s", path.Join(keyDirPath, files[0].Name()), errParams)
 			return
 		}
+
 		//read all keys
 		for _, f := range files {
 			fpath := path.Join(keyDirPath, f.Name())
@@ -313,7 +314,7 @@ func decrypt(c *cli.Context) (err error) {
 
 	// get and mkdir out path
 	outPath := c.String("out-dir")
-	os.MkdirAll(outPath, 0660)
+	os.MkdirAll(outPath, 0777)
 
 	// read patient files
 	patientDirPath := c.String("patient-dir")
@@ -394,6 +395,10 @@ func main() {
 					Name:   "frequency",
 					Usage:  "functional key for computing frequency count",
 					Action: genFrequencyKey,
+					Flags: []cli.Flag{
+						cli.StringFlag{Name: "msk"},
+						cli.StringFlag{Name: "out"},
+					},
 				},
 			},
 		},
