@@ -32,7 +32,6 @@ type MasterKey struct {
 
 type PublicParams struct {
 	Params  *pbc.Params
-	R, Q    int
 	Pairing *pbc.Pairing
 
 	O *pbc.Element
@@ -74,13 +73,13 @@ func DefaultSetup() (MasterKey, PublicParams) {
 }
 
 // Setup initializaes the MSK and PP
-func Setup(r int, q int) (msk MasterKey, pp PublicParams) {
+func Setup(r uint32, q uint32) (msk MasterKey, pp PublicParams) {
 	pbc.SetCryptoRandom()
 
 	msk = MasterKey{}
-	pp = PublicParams{R: r, Q: q}
+	pp = PublicParams{}
 
-	pp.Params = pbc.GenerateA(uint32(r), uint32(q))
+	pp.Params = pbc.GenerateA(r, q)
 	pp.Pairing = pp.Params.NewPairing()
 
 	pairing := pp.Pairing

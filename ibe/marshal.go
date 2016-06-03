@@ -27,9 +27,6 @@ type PublicParamsSerialized struct {
 func (pp PublicParams) ToSerialized() (ser PublicParamsSerialized) {
 	ser.Params = pp.Params.String()
 
-	ser.R = pp.R
-	ser.Q = pp.Q
-
 	ser.O = base64.URLEncoding.EncodeToString(pp.O.Bytes())
 	ser.G = base64.URLEncoding.EncodeToString(pp.G.Bytes())
 	ser.G0 = base64.URLEncoding.EncodeToString(pp.G0.Bytes())
@@ -50,9 +47,6 @@ func (ser PublicParamsSerialized) ToPublicParams() (pp PublicParams, err error) 
 	if err != nil {
 		return
 	}
-
-	pp.R = ser.R
-	pp.Q = ser.Q
 
 	pp.Pairing, err = pbc.NewPairingFromString(ser.Params)
 	if err != nil {

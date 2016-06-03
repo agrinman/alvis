@@ -5,6 +5,7 @@ import (
 	"log"
 	"path"
 	"runtime"
+
 	"strings"
 
 	"io/ioutil"
@@ -339,11 +340,17 @@ func decrypt(c *cli.Context) (err error) {
 
 //MARK: CLI
 func main() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
+	// set procs -1
+	runtime.GOMAXPROCS(runtime.NumCPU() - 1)
+
+	// for pprof
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
 
+	ibe.DefaultSetup()
+
+	// cli app
 	app := cli.NewApp()
 
 	app.Name = color.GreenString("Alvis")
