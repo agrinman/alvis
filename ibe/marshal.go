@@ -13,6 +13,8 @@ type PublicParamsSerialized struct {
 	R int
 	Q int
 
+	TrueEl string
+
 	O  string
 	G  string
 	G0 string
@@ -26,6 +28,8 @@ type PublicParamsSerialized struct {
 
 func (pp PublicParams) ToSerialized() (ser PublicParamsSerialized) {
 	ser.Params = pp.Params.String()
+
+	ser.TrueEl = base64.URLEncoding.EncodeToString(pp.TrueEl.Bytes())
 
 	ser.O = base64.URLEncoding.EncodeToString(pp.O.Bytes())
 	ser.G = base64.URLEncoding.EncodeToString(pp.G.Bytes())
@@ -54,6 +58,13 @@ func (ser PublicParamsSerialized) ToPublicParams() (pp PublicParams, err error) 
 	}
 
 	pairing := pp.Pairing
+
+	//TrueEl
+	TL, err := base64.URLEncoding.DecodeString(ser.TrueEl)
+	if err != nil {
+		return
+	}
+	pp.TrueEl = pairing.NewGT().SetBytes(TL)
 
 	// G
 	G, err := base64.URLEncoding.DecodeString(ser.G)

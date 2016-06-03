@@ -41,54 +41,57 @@ func TestOnlyIBE(t *testing.T) {
 
 func TestIBEWithMarshal(t *testing.T) {
 
-	msk, pp := DefaultSetup()
-	sk := msk.Extract("feugiat")
-	c := pp.EncryptKeyword("feugiat")
+	fmt.Println("Run 10 times...")
+	for i := 0; i < 10; i++ {
 
-	// marhsall all
-	res_msk, err := MarshalMasterKey(msk)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	res_sk, err := MarshallPrivateKey(pp, sk)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	res_ctxt, err := MarshalCipherTextBase64(c)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	// unmarhsal all
+		msk, pp := DefaultSetup()
+		sk := msk.Extract("feugiat")
+		c := pp.EncryptKeyword("feugiat")
 
-	msk2, err := UnmarshalMasterKey(res_msk)
-	if err != nil {
-		t.Error(err)
-		return
+		// marhsall all
+		res_msk, err := MarshalMasterKey(msk)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		res_sk, err := MarshallPrivateKey(pp, sk)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		res_ctxt, err := MarshalCipherTextBase64(c)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		// unmarhsal all
+
+		msk2, err := UnmarshalMasterKey(res_msk)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+
+		sk2, err := UnmarshalPrivateKey(msk2.Params, res_sk)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+
+		c2, err := UnmarshalCipherTextBase64(msk2.Params, res_ctxt)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+
+		// check it all works out
+		ret := msk2.Params.DecryptAndCheck(sk2, c2)
+
+		if !ret {
+			t.Errorf("[it %d] Got %d\nExpected %d", i, msk2.Params.Decrypt(sk2, c2).Bytes(), pp.TrueEl.Bytes())
+			return
+		}
 	}
-
-	sk2, err := UnmarshalPrivateKey(msk2.Params, res_sk)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	c2, err := UnmarshalCipherTextBase64(msk2.Params, res_ctxt)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	// check it all works out
-	ret := msk2.Params.DecryptAndCheck(sk2, c2)
-
-	if !ret {
-		t.Errorf("Got %d\nExpected %d", msk2.Params.Decrypt(sk2, c2).Bytes(), pp.Pairing.NewGT().SetFromStringHash("true", sha256.New()).Bytes())
-		return
-	}
-
 }
 
 // func TestIBEParallel(t *testing.T) {
@@ -119,13 +122,20 @@ func BenchmarkIBEEncrypt(b *testing.B) {
 
 func BenchmarkIBEDecrypt(b *testing.B) {
 	master, pp := DefaultSetup()
-	m := pp.Pairing.NewGT().SetFromStringHash("true", sha256.New())
-	c := pp.Encrypt("ullamcorper", m)
+	c := pp.EncryptKeyword("ullamcorper")
 	sk := master.Extract("ullamcorper")
+
 	b.ResetTimer()
+	v := true
 	for n := 0; n < b.N; n++ {
-		pp.Decrypt(sk, c)
+		v = v && pp.DecryptAndCheck(sk, c)
 	}
+
+	if !v {
+		b.Errorf("failed decrypt")
+		return
+	}
+
 }
 
 const (

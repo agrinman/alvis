@@ -96,7 +96,7 @@ func DecryptAndSavePatientFile(inpath string, outpath string, params ibe.PublicP
 				color.Red("Cannot decrypt bytes: %d", tbytes)
 			}
 
-			decryptedTokens[i] = string(decryptedToken)
+			decryptedTokens[i] = base64.URLEncoding.EncodeToString(decryptedToken)
 			// 	w.Done()
 			// }(&wg, i, t)
 		}
@@ -115,7 +115,6 @@ func DecryptAndSavePatientFile(inpath string, outpath string, params ibe.PublicP
 				// w.Done()
 				// return
 			}
-
 			for _, sk := range keywordKeys {
 				if params.DecryptAndCheck(sk, ctxt) {
 					color.Magenta("Decrypted keyword successfully: %s", sk.Keyword)

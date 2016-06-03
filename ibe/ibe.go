@@ -18,6 +18,9 @@ const (
 
 	// Q is the bitlen of a prime for field F_q for some prime q = 3 mod 4
 	Q = 512
+
+	// trueEl is string that is hashed to derive the TrueEl element
+	trueEl = "true"
 )
 
 type MasterKey struct {
@@ -33,6 +36,8 @@ type MasterKey struct {
 type PublicParams struct {
 	Params  *pbc.Params
 	Pairing *pbc.Pairing
+
+	TrueEl *pbc.Element
 
 	O *pbc.Element
 
@@ -83,6 +88,8 @@ func Setup(r uint32, q uint32) (msk MasterKey, pp PublicParams) {
 	pp.Pairing = pp.Params.NewPairing()
 
 	pairing := pp.Pairing
+
+	pp.TrueEl = pairing.NewGT().SetFromStringHash(trueEl, sha256.New())
 
 	pp.G = pairing.NewG1().Rand()
 	pp.G0 = pairing.NewG1().Rand()
@@ -187,16 +194,13 @@ func (pp PublicParams) Decrypt(sk PrivateKey, ctxt CipherText) *pbc.Element {
 
 //MARK: Convenience Encrypt/Decrypt
 
-const trueEl = "true"
-
 func (pp PublicParams) EncryptKeyword(id string) CipherText {
-	m := pp.Pairing.NewGT().SetFromStringHash(trueEl, sha256.New())
-	return pp.Encrypt(id, m)
+	return pp.Encrypt(id, pp.TrueEl)
 }
 
 func (pp PublicParams) DecryptAndCheck(sk PrivateKey, ctxt CipherText) bool {
 	mG := pp.Decrypt(sk, ctxt)
-	return pp.Pairing.NewGT().SetFromStringHash(trueEl, sha256.New()).Equals(mG)
+	return pp.TrueEl.Equals(mG)
 }
 
 //MARK: Helpers
