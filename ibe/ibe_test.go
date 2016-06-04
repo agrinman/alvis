@@ -7,8 +7,10 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
+	"github.com/Nik-U/pbc"
 	"github.com/fatih/color"
 )
 
@@ -134,6 +136,33 @@ func BenchmarkIBEDecrypt(b *testing.B) {
 	if !v {
 		b.Errorf("failed decrypt")
 		return
+	}
+
+}
+
+func BenchmarkSinglePair(b *testing.B) {
+	_, pp := DefaultSetup()
+
+	pbc.SetCryptoRandom()
+
+	pairing := pp.Pairing
+
+	g1 := pairing.NewG1().Rand()
+	g2 := pairing.NewG2().Rand()
+	b.ResetTimer()
+
+	for n := 0; n < b.N; n++ {
+		var wg sync.WaitGroup
+		wg.Add(5)
+
+		for i := 0; i < 5; i++ {
+			go func(w *sync.WaitGroup) {
+				pairing.NewGT().Pair(g1, g2)
+				w.Done()
+			}(&wg)
+		}
+
+		wg.Wait()
 	}
 
 }
