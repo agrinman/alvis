@@ -1,14 +1,17 @@
-package main
+package aesutil
 
 import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"log"
 )
+
+var KeySize = 256
 
 //MARK: AES Wrappers
 func AESEncrypt(key []byte, message []byte) (result []byte, err error) {
@@ -108,4 +111,11 @@ func UnPKCS7Padding(data []byte) []byte {
 	length := len(data)
 	unpadding := int(data[length-1])
 	return data[:(length - unpadding)]
+}
+
+//MARK: SHA Helpers
+func SHA2(data string) []byte {
+	h := sha256.New()
+	h.Write([]byte(data))
+	return h.Sum(nil)
 }

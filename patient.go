@@ -11,13 +11,15 @@ import (
 	"sync"
 	"unicode"
 
+	"github.com/agrinman/alvis/aesutil"
+	"github.com/agrinman/alvis/freqFE"
 	"github.com/agrinman/alvis/ibe"
 
 	"github.com/fatih/color"
 )
 
 //MARK: Encryption/Decryption
-func EncryptAndSavePatientFile(inpath string, outpath string, master ibe.MasterKey, freq FreqFEMasterKey) (err error) {
+func EncryptAndSavePatientFile(inpath string, outpath string, master ibe.MasterKey, freq freqFE.MasterKey) (err error) {
 	patient, err := readPatientFile(inpath)
 	encryptedPatient := ApplyCryptorToPatient(patient, func(freeText interface{}) interface{} {
 
@@ -38,7 +40,7 @@ func EncryptAndSavePatientFile(inpath string, outpath string, master ibe.MasterK
 		encryptedFreqFETokens := make([]string, len(tokens))
 
 		for i := range tokens {
-			res, resErr := EncryptInnerOuter(freq, []byte(tokens[i]))
+			res, resErr := freqFE.EncryptInnerOuter(freq, []byte(tokens[i]))
 			if resErr != nil {
 				return resErr
 			}
@@ -91,7 +93,7 @@ func DecryptAndSavePatientFile(inpath string, outpath string, params ibe.PublicP
 				color.Red("Cannot decode base64: %s", t)
 			}
 
-			decryptedToken, errDecr := AESDecrypt(freqOuter, tbytes)
+			decryptedToken, errDecr := aesutil.AESDecrypt(freqOuter, tbytes)
 			if errDecr != nil {
 				color.Red("Cannot decrypt bytes: %d", tbytes)
 			}

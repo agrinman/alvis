@@ -1,4 +1,4 @@
-package main
+package regexFE
 
 // Transition is the tuple of X -> Y on input C
 type Transition struct {

@@ -1,4 +1,4 @@
-package main
+package freqFE
 
 import "testing"
 import "bytes"

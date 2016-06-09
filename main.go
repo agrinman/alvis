@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"os"
 
+	"github.com/agrinman/alvis/freqFE"
 	"github.com/agrinman/alvis/ibe"
 
 	"github.com/fatih/color"
@@ -24,7 +25,7 @@ import (
 
 type MasterKey struct {
 	KeywordKey   ibe.MasterKeySerialized
-	FrequencyKey FreqFEMasterKey
+	FrequencyKey freqFE.MasterKey
 }
 
 type KeyParams struct {
@@ -32,7 +33,7 @@ type KeyParams struct {
 	Params ibe.PublicParamsSerialized `json:"params"`
 }
 
-func parseMasterKey(filepath string) (master ibe.MasterKey, freq FreqFEMasterKey, err error) {
+func parseMasterKey(filepath string) (master ibe.MasterKey, freq freqFE.MasterKey, err error) {
 	mskBytes, err := ioutil.ReadFile(filepath)
 	if err != nil {
 		return
@@ -102,7 +103,7 @@ func genMaster(c *cli.Context) (err error) {
 	outPath := c.String("out")
 
 	// setup frequency key
-	freqMaster, err := GenFrequencyFE()
+	freqMaster, err := freqFE.GenMasterKey()
 	if err != nil {
 		color.Red(err.Error())
 		return
