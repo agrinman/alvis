@@ -72,7 +72,7 @@ func AESDecryptWithIV(key []byte, iv []byte, cipherText []byte) (result []byte, 
 
 	result = make([]byte, len(cipherText))
 	cipher.NewCBCDecrypter(block, iv).CryptBlocks(result, cipherText)
-	result = UnPKCS7Padding(result)
+	result, err = UnPKCS7Padding(result)
 
 	return
 }
@@ -107,16 +107,19 @@ func PKCS7Padding(data []byte) []byte {
 
 }
 
-func UnPKCS7Padding(data []byte) []byte {
+func UnPKCS7Padding(data []byte) (result []byte, err error) {
 	length := len(data)
 	unpadding := int(data[length-1])
 
-	fmt.Println("length: ", length)
-	fmt.Println("up: ", unpadding)
-	fmt.Println("l - up: ", length-unpadding)
-	fmt.Println("data: ", string(data))
+	remove := length - unpadding
+	if remove < 0 {
+		err = errors.New("Invalid PKCS7 padding")
+		return
+	}
 
-	return data[:(length - unpadding)]
+	result = data[:(length - unpadding)]
+
+	return
 }
 
 //MARK: SHA Helpers

@@ -2,7 +2,28 @@
 build:
 	go build
 
+test: clean
+	go install
+
+	alvis gen-msk -out tmp/master.priv
+
+	cd tmp/ && alvis encrypt -msk master.priv -patient-dir patients/ -out-dir enc_patients
+
+	cd tmp/ && alvis gen-sk keyword -msk master.priv -words words.txt -out-dir keys
+
+	cd tmp/ && alvis gen-sk frequency -msk master.priv -out freq.sk
+
+	cd tmp/ && alvis decrypt -key-dir keys/ -freq-key freq.sk -patient-dir enc_patients/ -out-dir dec_patients
+
+clean:
+	rm tmp/master.priv
+	rm tmp/freq.sk
+	rm -rf tmp/dec_patients/
+	rm -rf tmp/keys/
+	rm -rf tmp/enc_patients/
+
+
 install:
 	go install
 
-.PHONY: build install
+.PHONY: build test clean install
