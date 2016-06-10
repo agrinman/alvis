@@ -110,6 +110,12 @@ func PKCS7Padding(data []byte) []byte {
 func UnPKCS7Padding(data []byte) []byte {
 	length := len(data)
 	unpadding := int(data[length-1])
+
+	fmt.Println("length: ", length)
+	fmt.Println("up: ", unpadding)
+	fmt.Println("l - up: ", length-unpadding)
+	fmt.Println("data: ", string(data))
+
 	return data[:(length - unpadding)]
 }
 

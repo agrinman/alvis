@@ -8,18 +8,17 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"unicode"
 
 	"github.com/agrinman/alvis/aesutil"
 	"github.com/agrinman/alvis/freqFE"
-	"github.com/agrinman/alvis/ibe"
+	"github.com/agrinman/alvis/privKS"
 
 	"github.com/fatih/color"
 )
 
 //MARK: Encryption/Decryption
-func EncryptAndSavePatientFile(inpath string, outpath string, master ibe.MasterKey, freq freqFE.MasterKey) (err error) {
+func EncryptAndSavePatientFile(inpath string, outpath string, master MasterKey) (err error) {
 	patient, err := readPatientFile(inpath)
 	encryptedPatient := ApplyCryptorToPatient(patient, func(freeText interface{}) interface{} {
 
@@ -29,10 +28,12 @@ func EncryptAndSavePatientFile(inpath string, outpath string, master ibe.MasterK
 
 		encryptedKeywordFETokens := make([]string, numTokens)
 		for i, t := range tokens {
-			encryptedKeywordFETokens[i], err = ibe.MarshalCipherTextBase64(master.Params.EncryptKeyword(t))
-			if err != nil {
-				fmt.Println("Found error while encrypting/serializing keyword: ", err)
+			ctxtBytes, errEnc := master.KeywordKey.EncryptKeyword(t)
+			if errEnc != nil {
+				fmt.Println("Found error while encrypting/serializing keyword: ", errEnc)
 			}
+
+			encryptedKeywordFETokens[i] = base64.URLEncoding.EncodeToString(ctxtBytes)
 		}
 
 		color.Yellow("Done with %d", len(tokens))
@@ -40,7 +41,7 @@ func EncryptAndSavePatientFile(inpath string, outpath string, master ibe.MasterK
 		encryptedFreqFETokens := make([]string, len(tokens))
 
 		for i := range tokens {
-			res, resErr := freqFE.EncryptInnerOuter(freq, []byte(tokens[i]))
+			res, resErr := freqFE.EncryptInnerOuter(master.FrequencyKey, []byte(tokens[i]))
 			if resErr != nil {
 				return resErr
 			}
@@ -58,7 +59,7 @@ func EncryptAndSavePatientFile(inpath string, outpath string, master ibe.MasterK
 	return
 }
 
-func DecryptAndSavePatientFile(inpath string, outpath string, params ibe.PublicParams, keywordKeys []ibe.PrivateKey, freqOuter []byte) (err error) {
+func DecryptAndSavePatientFile(inpath string, outpath string, keywordKeys []privKS.PrivateKey, freqOuter []byte) (err error) {
 
 	patient, err := readPatientFile(inpath)
 	decryptedPatient := ApplyCryptorToPatient(patient, func(encryptedMap interface{}) interface{} {
@@ -111,14 +112,15 @@ func DecryptAndSavePatientFile(inpath string, outpath string, params ibe.PublicP
 		for i, ctxtString := range encryptedKeywordFETokens {
 			// go func(w *sync.WaitGroup, i int, ctxtString string) {
 
-			ctxt, errUnmarsh := ibe.UnmarshalCipherTextBase64(params, ctxtString.(string))
-			if errUnmarsh != nil {
-				color.Red("Cannot unmarshall cipher text: %s. Error: ", ctxt, errUnmarsh)
+			ctxt, errDecode := base64.URLEncoding.DecodeString(ctxtString.(string))
+			if errDecode != nil {
+				color.Red("Cannot decode cipher text: %s. Error: ", ctxt, errDecode)
 				// w.Done()
 				// return
 			}
 			for _, sk := range keywordKeys {
-				if params.DecryptAndCheck(sk, ctxt) {
+				//fmt.Println("ctxt: ", ctxtString)
+				if sk.DecryptAndCheck(ctxt) {
 					color.Magenta("Decrypted keyword successfully: %s", sk.Keyword)
 					decryptedTokens[i] = sk.Keyword
 				}
@@ -162,27 +164,27 @@ func ApplyCryptorToPatient(patient map[string]interface{}, cryptor func(interfac
 	newLnoNotes := make([]map[string]interface{}, len(lnoNotes))
 
 	fmt.Println(len(cardiacNotes) + len(lnoNotes))
-	var wg sync.WaitGroup
-	wg.Add(len(cardiacNotes) + len(lnoNotes))
+	//	var wg sync.WaitGroup
+	//	wg.Add(len(cardiacNotes) + len(lnoNotes))
 
 	for i := range cardiacNotes {
 		note := cardiacNotes[i].(map[string]interface{})
-		go func(w *sync.WaitGroup, i int, note map[string]interface{}) {
-			note["free_text"] = cryptor(note["free_text"])
-			newCarNotes[i] = note
-			w.Done()
-		}(&wg, i, note)
+		//	go func(w *sync.WaitGroup, i int, note map[string]interface{}) {
+		note["free_text"] = cryptor(note["free_text"])
+		newCarNotes[i] = note
+		//		w.Done()
+		//	}(&wg, i, note)
 	}
 
 	for i := range lnoNotes {
 		note := lnoNotes[i].(map[string]interface{})
-		go func(w *sync.WaitGroup, i int, note map[string]interface{}) {
-			note["free_text"] = cryptor(note["free_text"])
-			newLnoNotes[i] = note
-			w.Done()
-		}(&wg, i, note)
+		//	go func(w *sync.WaitGroup, i int, note map[string]interface{}) {
+		note["free_text"] = cryptor(note["free_text"])
+		newLnoNotes[i] = note
+		//		w.Done()
+		//	}(&wg, i, note)
 	}
-	wg.Wait()
+	//wg.Wait()
 
 	patient["Car"] = newCarNotes
 	patient["Lno"] = newLnoNotes

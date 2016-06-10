@@ -15,6 +15,8 @@ type PrivateKey struct {
 	Key     []byte
 }
 
+var OneVec = []byte{0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+
 //MARK: Private Encryption Keyword Search Methods
 
 func GenMasterKey() (msk MasterKey, err error) {
@@ -28,11 +30,29 @@ func (msk MasterKey) Extract(id string) (sk PrivateKey) {
 }
 
 func (msk MasterKey) EncryptKeyword(id string) (res []byte, err error) {
+	sk := msk.Extract(id)
+	res, err = aesutil.AESEncrypt(sk.Key, OneVec)
+
 	return
 }
 
 func (sk PrivateKey) DecryptAndCheck(ctx []byte) bool {
-	return false
+	res, err := aesutil.AESDecrypt(sk.Key, ctx)
+	if err != nil {
+		return false
+	}
+
+	if len(res) != len(OneVec) {
+		return false
+	}
+
+	for i, b := range res {
+		if b != OneVec[i] {
+			return false
+		}
+	}
+
+	return true
 }
 
 //MARK: Hash
@@ -43,7 +63,7 @@ func h(id string, salt []byte) []byte {
 	copy(msg[:32], SHA2([]byte(id)))
 	copy(msg[32:], SHA2(salt))
 
-	return msg
+	return SHA2(msg)
 }
 
 func SHA2(b []byte) []byte {

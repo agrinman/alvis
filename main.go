@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"path"
 	"runtime"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/agrinman/alvis/freqFE"
 	"github.com/agrinman/alvis/ibe"
+	"github.com/agrinman/alvis/privKS"
 
 	"github.com/fatih/color"
 	"github.com/urfave/cli"
@@ -24,7 +26,7 @@ import (
 //MARK: Key types and parsing
 
 type MasterKey struct {
-	KeywordKey   ibe.MasterKeySerialized
+	KeywordKey   privKS.MasterKey
 	FrequencyKey freqFE.MasterKey
 }
 
@@ -33,63 +35,29 @@ type KeyParams struct {
 	Params ibe.PublicParamsSerialized `json:"params"`
 }
 
-func parseMasterKey(filepath string) (master ibe.MasterKey, freq freqFE.MasterKey, err error) {
+func parseMasterKey(filepath string) (msk MasterKey, err error) {
 	mskBytes, err := ioutil.ReadFile(filepath)
 	if err != nil {
 		return
 	}
 
 	// unmarshall master secret
-	var msk MasterKey
 	err = json.Unmarshal(mskBytes, &msk)
 	if err != nil {
 		return
 	}
 
-	// ibe master
-	master, err = ibe.UnmarshalMasterKey(msk.KeywordKey)
-	if err != nil {
-		return
-	}
-
-	return master, msk.FrequencyKey, err
-}
-
-func parseParams(filepath string) (params ibe.PublicParams, err error) {
-	kpBytes, err := ioutil.ReadFile(filepath)
-	if err != nil {
-		return
-	}
-
-	// unmarshall master secret
-	var kp KeyParams
-	err = json.Unmarshal(kpBytes, &kp)
-	if err != nil {
-		return
-	}
-
-	params, err = kp.Params.ToPublicParams()
-
 	return
 }
 
-func parsePrivateKey(params ibe.PublicParams, filepath string) (privateKey ibe.PrivateKey, err error) {
+func parsePrivateKey(filepath string) (privateKey privKS.PrivateKey, err error) {
 	kpBytes, err := ioutil.ReadFile(filepath)
 	if err != nil {
 		return
 	}
 
-	// unmarshall master secret
-	var kp KeyParams
-	err = json.Unmarshal(kpBytes, &kp)
-	if err != nil {
-		return
-	}
-
-	privateKey, err = ibe.UnmarshalPrivateKey(params, kp.Key)
-	if err != nil {
-		return
-	}
+	// unmarshall private key
+	err = json.Unmarshal(kpBytes, &privateKey)
 
 	return
 }
@@ -110,15 +78,12 @@ func genMaster(c *cli.Context) (err error) {
 	}
 
 	// setup ibe key
-	ibeMaster, _ := ibe.DefaultSetup()
-
-	// marshall ibe master key
-	masterSer, err := ibe.MarshalMasterKey(ibeMaster)
+	keyMaster, err := privKS.GenMasterKey()
 	if err != nil {
+		color.Red(err.Error())
 		return
 	}
-
-	msk := MasterKey{masterSer, freqMaster}
+	msk := MasterKey{keyMaster, freqMaster}
 
 	outBytes, err := json.Marshal(msk)
 	if err != nil {
@@ -134,45 +99,51 @@ func genMaster(c *cli.Context) (err error) {
 
 func genKeywordKey(c *cli.Context) (err error) {
 	if c.NumFlags() < 3 {
-		color.Red("Missing 'msk' for path to master secret key OR '-word' for the keyword OR '-out' flag for filepath of search keyword secret key")
+		color.Red("Missing parameters: \n\t-msk for path to master secret key \n\t-words a file containing keywords on each file  \n\t-out-dir directory path where secret keys will be written to")
 		return
 	}
 
 	// read master secret file
 	mskPath := c.String("msk")
 
-	master, _, err := parseMasterKey(mskPath)
+	master, err := parseMasterKey(mskPath)
 	if err != nil {
 		color.Red(err.Error())
 		return
 	}
+
+	// get out path ready
+	outPath := c.String("out-dir")
+	os.MkdirAll(outPath, 0777)
 
 	// gen secret key
-	word := c.String("word")
-	secretKey := master.Extract(word)
-
-	// marshall secretKey and params
-	skSer, err := ibe.MarshallPrivateKey(master.Params, secretKey)
+	wordFile := c.String("words")
+	words, err := ioutil.ReadFile(wordFile)
 	if err != nil {
 		color.Red(err.Error())
 		return
 	}
 
-	paramSer := master.Params.ToSerialized()
+	// create sk for all the words
+	for _, w := range strings.Split(string(words), "\n") {
+		w = strings.TrimSpace(w)
+		if len(w) == 0 {
+			continue
+		}
 
-	sk := KeyParams{skSer, paramSer}
+		secretKey := master.KeywordKey.Extract(w)
 
-	outBytes, err := json.Marshal(sk)
-	if err != nil {
-		color.Red(err.Error())
-		return
+		outBytes, err := json.Marshal(secretKey)
+		if err != nil {
+			color.Red(err.Error())
+			continue
+		}
+
+		fpath := path.Join(outPath, fmt.Sprintf("%s.sk", w))
+
+		// write file
+		err = ioutil.WriteFile(fpath, outBytes, 0660)
 	}
-
-	// get outPath
-	outPath := c.String("out")
-
-	// write file
-	err = ioutil.WriteFile(outPath, outBytes, 0660)
 
 	return
 }
@@ -186,13 +157,13 @@ func genFrequencyKey(c *cli.Context) (err error) {
 	// read master secret file
 	mskPath := c.String("msk")
 
-	_, freq, err := parseMasterKey(mskPath)
+	master, err := parseMasterKey(mskPath)
 	if err != nil {
 		color.Red(err.Error())
 		return
 	}
 
-	outBytes := freq.OuterKey
+	outBytes := master.FrequencyKey.OuterKey
 
 	// get outPath
 	outPath := c.String("out")
@@ -211,7 +182,7 @@ func encrypt(c *cli.Context) (err error) {
 
 	// read master secret file
 	mskPath := c.String("msk")
-	master, freq, err := parseMasterKey(mskPath)
+	master, err := parseMasterKey(mskPath)
 	if err != nil {
 		color.Red(err.Error())
 		return
@@ -239,7 +210,7 @@ func encrypt(c *cli.Context) (err error) {
 			in := path.Join(patientDirPath, f.Name())
 			out := path.Join(outPath, f.Name()+".enc")
 
-			err = EncryptAndSavePatientFile(in, out, master, freq)
+			err = EncryptAndSavePatientFile(in, out, master)
 			if err != nil {
 				color.Red("Cannot EncryptAndSavePatientFile: %s", err)
 				return
@@ -278,30 +249,17 @@ func decrypt(c *cli.Context) (err error) {
 		return
 	}
 
-	var keywordKeys []ibe.PrivateKey
-	var params ibe.PublicParams
-	var errParams error
+	var keywordKeys []privKS.PrivateKey
 
 	switch mode := fi.Mode(); {
 	case mode.IsDir():
 		files, _ := ioutil.ReadDir(keyDirPath)
-		if len(files) == 0 {
-			color.Yellow("No functional keyword keys found in key dir %s. Skipping keyword decryptions.", keyDirPath)
-			break
-		}
-
-		params, errParams = parseParams(path.Join(keyDirPath, files[0].Name()))
-		if errParams != nil {
-			color.Red("Could not read system parameters. Invalid keword functional key: %s. Error: %s", path.Join(keyDirPath, files[0].Name()), errParams)
-			return
-		}
-
 		//read all keys
 		for _, f := range files {
 			fpath := path.Join(keyDirPath, f.Name())
 
 			// try to parse as ibe.private key
-			privateKey, parseErr := parsePrivateKey(params, fpath)
+			privateKey, parseErr := parsePrivateKey(fpath)
 			if parseErr == nil {
 				keywordKeys = append(keywordKeys, privateKey)
 			} else {
@@ -335,7 +293,7 @@ func decrypt(c *cli.Context) (err error) {
 			in := path.Join(patientDirPath, f.Name())
 			out := path.Join(outPath, strings.Replace(f.Name(), ".enc", "", 1))
 
-			err = DecryptAndSavePatientFile(in, out, params, keywordKeys, freqOuterKey)
+			err = DecryptAndSavePatientFile(in, out, keywordKeys, freqOuterKey)
 			if err != nil {
 				color.Red("Cannot EncryptAndSavePatientFile: %s", err)
 				return
@@ -387,9 +345,9 @@ func main() {
 					Usage:  "search keyword functional key",
 					Action: genKeywordKey,
 					Flags: []cli.Flag{
-						cli.StringFlag{Name: "word"},
+						cli.StringFlag{Name: "words"},
 						cli.StringFlag{Name: "msk"},
-						cli.StringFlag{Name: "out"},
+						cli.StringFlag{Name: "out-dir"},
 					},
 				},
 				{
