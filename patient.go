@@ -54,12 +54,6 @@ func EncryptAndSavePatientFile(inpath string, outpath string, master MasterKey) 
 				color.Red("Found error while encoding keyword: ", errEncode)
 			}
 
-			dec, _ := base36.DecodeString(encryptedKeywordFETokens[i])
-			if len(dec)%16 != 0 {
-				fmt.Printf("Weird encoding of %s: <%d> <%s> <%d>\n", tokens[i], res, encryptedFreqFETokens[i], dec)
-				os.Exit(2)
-			}
-
 		}
 
 		resultMap := make(map[string]interface{})
@@ -104,8 +98,6 @@ func DecryptAndSavePatientFile(inpath string, outpath string, keywordKeys []priv
 				color.Red("Cannot decode (1): %s. Error: %s", t.(string), errDecode)
 				continue
 			}
-
-			fmt.Println(len(tbytes), t.(string), tbytes)
 
 			decryptedToken, errDecr := aesutil.AESDecrypt(freqOuter, tbytes)
 			if errDecr != nil {
@@ -174,27 +166,27 @@ func ApplyCryptorToPatient(patient map[string]interface{}, cryptor func(interfac
 	lnoNotes, _ := patient["Lno"].([]interface{})
 	newLnoNotes := make([]map[string]interface{}, len(lnoNotes))
 
-	// var wg sync.WaitGroup
-	// wg.Add(len(cardiacNotes) + len(lnoNotes))
+	var wg sync.WaitGroup
+	wg.Add(len(cardiacNotes) + len(lnoNotes))
 
 	for i := range cardiacNotes {
 		note := cardiacNotes[i].(map[string]interface{})
-		// go func(w *sync.WaitGroup, i int, note map[string]interface{}) {
-		note["free_text"] = cryptor(note["free_text"])
-		newCarNotes[i] = note
-		// 	w.Done()
-		// }(&wg, i, note)
+		go func(w *sync.WaitGroup, i int, note map[string]interface{}) {
+			note["free_text"] = cryptor(note["free_text"])
+			newCarNotes[i] = note
+			w.Done()
+		}(&wg, i, note)
 	}
 
 	for i := range lnoNotes {
 		note := lnoNotes[i].(map[string]interface{})
-		// go func(w *sync.WaitGroup, i int, note map[string]interface{}) {
-		note["free_text"] = cryptor(note["free_text"])
-		newLnoNotes[i] = note
-		// 	w.Done()
-		// }(&wg, i, note)
+		go func(w *sync.WaitGroup, i int, note map[string]interface{}) {
+			note["free_text"] = cryptor(note["free_text"])
+			newLnoNotes[i] = note
+			w.Done()
+		}(&wg, i, note)
 	}
-	// wg.Wait()
+	wg.Wait()
 
 	patient["Car"] = newCarNotes
 	patient["Lno"] = newLnoNotes
