@@ -2,13 +2,10 @@ package privKS
 
 import (
 	"os"
-	"runtime"
 	"testing"
 )
 
 func TestMain(m *testing.M) {
-	runtime.GOMAXPROCS(runtime.NumCPU() - 1)
-
 	os.Exit(m.Run())
 }
 

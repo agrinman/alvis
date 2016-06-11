@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -12,6 +11,7 @@ import (
 	"unicode"
 
 	"github.com/agrinman/alvis/aesutil"
+	"github.com/agrinman/alvis/base36"
 	"github.com/agrinman/alvis/freqFE"
 	"github.com/agrinman/alvis/privKS"
 
@@ -25,19 +25,21 @@ func EncryptAndSavePatientFile(inpath string, outpath string, master MasterKey) 
 
 		tokens := SplitFreeText(freeText.(string))
 		numTokens := len(tokens)
-		color.Yellow("Begining KeywordFE Encryption with %d tokens...", numTokens)
 
 		encryptedKeywordFETokens := make([]string, numTokens)
 		for i, t := range tokens {
 			ctxtBytes, errEnc := master.KeywordKey.EncryptKeyword(t)
 			if errEnc != nil {
-				fmt.Println("Found error while encrypting/serializing keyword: ", errEnc)
+				color.Red("Found error while encrypting/serializing keyword: ", errEnc)
 			}
 
-			encryptedKeywordFETokens[i] = base64.URLEncoding.EncodeToString(ctxtBytes)
-		}
+			var errEncode error
+			encryptedKeywordFETokens[i], errEncode = base36.Encode(ctxtBytes)
+			if errEncode != nil {
+				color.Red("Found error while encoding keyword: ", errEncode)
+			}
 
-		color.Yellow("Done with %d", len(tokens))
+		}
 
 		encryptedFreqFETokens := make([]string, len(tokens))
 
@@ -46,7 +48,18 @@ func EncryptAndSavePatientFile(inpath string, outpath string, master MasterKey) 
 			if resErr != nil {
 				return resErr
 			}
-			encryptedFreqFETokens[i] = base64.URLEncoding.EncodeToString(res)
+			var errEncode error
+			encryptedFreqFETokens[i], errEncode = base36.Encode(res)
+			if errEncode != nil {
+				color.Red("Found error while encoding keyword: ", errEncode)
+			}
+
+			dec, _ := base36.DecodeString(encryptedKeywordFETokens[i])
+			if len(dec)%16 != 0 {
+				fmt.Printf("Weird encoding of %s: <%d> <%s> <%d>\n", tokens[i], res, encryptedFreqFETokens[i], dec)
+				os.Exit(2)
+			}
+
 		}
 
 		resultMap := make(map[string]interface{})
@@ -63,6 +76,9 @@ func EncryptAndSavePatientFile(inpath string, outpath string, master MasterKey) 
 func DecryptAndSavePatientFile(inpath string, outpath string, keywordKeys []privKS.PrivateKey, freqOuter []byte) (err error) {
 
 	patient, err := readPatientFile(inpath)
+
+	stats := make(map[string]int)
+	statsMutex := &sync.Mutex{}
 	decryptedPatient := ApplyCryptorToPatient(patient, func(encryptedMap interface{}) interface{} {
 
 		inMap, ok := encryptedMap.(map[string]interface{})
@@ -78,62 +94,56 @@ func DecryptAndSavePatientFile(inpath string, outpath string, keywordKeys []priv
 			os.Exit(2)
 		}
 
-		numTokens := len(encryptedFreqFETokens)
-
-		// run in parallel
-		// var wg sync.WaitGroup
-		// wg.Add(2 * numTokens)
-
-		// start by decrypting freq enc first
+		//numTokens := len(encryptedFreqFETokens)
 
 		decryptedTokens := make([]string, len(encryptedFreqFETokens))
 
 		for i, t := range encryptedFreqFETokens {
-			// go func(w *sync.WaitGroup, i int, t string) {
-			tbytes, errB64 := base64.URLEncoding.DecodeString(t.(string))
-			if errB64 != nil {
-				color.Red("Cannot decode base64: %s", t)
+			tbytes, errDecode := base36.DecodeString(t.(string))
+			if errDecode != nil {
+				color.Red("Cannot decode (1): %s. Error: %s", t.(string), errDecode)
+				continue
 			}
+
+			fmt.Println(len(tbytes), t.(string), tbytes)
 
 			decryptedToken, errDecr := aesutil.AESDecrypt(freqOuter, tbytes)
 			if errDecr != nil {
 				color.Red("Cannot decrypt bytes: %d", tbytes)
+				continue
 			}
 
-			decryptedTokens[i] = base64.URLEncoding.EncodeToString(decryptedToken)
-			// 	w.Done()
-			// }(&wg, i, t)
+			var errEncode error
+			decryptedTokens[i], errEncode = base36.Encode(decryptedToken)
+			if errEncode != nil {
+				color.Red("Found error while encoding keyword: ", errEncode)
+			}
+
 		}
 
-		color.Yellow("Frequency phase done: %d tokens.", numTokens)
-
 		// next do keyword fe decryptions
-		color.Yellow("Begining KeywordFE Decryption with %d tokens...", numTokens)
-
 		for i, ctxtString := range encryptedKeywordFETokens {
-			// go func(w *sync.WaitGroup, i int, ctxtString string) {
-
-			ctxt, errDecode := base64.URLEncoding.DecodeString(ctxtString.(string))
+			ctxt, errDecode := base36.DecodeString(ctxtString.(string))
 			if errDecode != nil {
 				color.Red("Cannot decode cipher text: %s. Error: ", ctxt, errDecode)
-				// w.Done()
-				// return
 			}
 			for _, sk := range keywordKeys {
-				//fmt.Println("ctxt: ", ctxtString)
 				if sk.DecryptAndCheck(ctxt) {
-					color.Magenta("Decrypted keyword successfully: %s", sk.Keyword)
+					statsMutex.Lock()
+					stats[sk.Keyword] += 1
+					statsMutex.Unlock()
+
+					//color.Magenta("Decrypted keyword successfully: %s", sk.Keyword)
 					decryptedTokens[i] = sk.Keyword
 				}
 			}
-			// 	w.Done()
-			// }(&wg, i, ctxtString)
 		}
-		// wg.Wait()
 
-		color.Yellow("Done Keyword Decryption Phase for %d tokens.", numTokens)
 		return strings.Join(decryptedTokens, " ")
 	})
+
+	color.Green("-- stats on %s --", inpath)
+	printStats(stats)
 
 	err = writePatient(decryptedPatient, outpath)
 	return
@@ -164,27 +174,27 @@ func ApplyCryptorToPatient(patient map[string]interface{}, cryptor func(interfac
 	lnoNotes, _ := patient["Lno"].([]interface{})
 	newLnoNotes := make([]map[string]interface{}, len(lnoNotes))
 
-	var wg sync.WaitGroup
-	wg.Add(len(cardiacNotes) + len(lnoNotes))
+	// var wg sync.WaitGroup
+	// wg.Add(len(cardiacNotes) + len(lnoNotes))
 
 	for i := range cardiacNotes {
 		note := cardiacNotes[i].(map[string]interface{})
-		go func(w *sync.WaitGroup, i int, note map[string]interface{}) {
-			note["free_text"] = cryptor(note["free_text"])
-			newCarNotes[i] = note
-			w.Done()
-		}(&wg, i, note)
+		// go func(w *sync.WaitGroup, i int, note map[string]interface{}) {
+		note["free_text"] = cryptor(note["free_text"])
+		newCarNotes[i] = note
+		// 	w.Done()
+		// }(&wg, i, note)
 	}
 
 	for i := range lnoNotes {
 		note := lnoNotes[i].(map[string]interface{})
-		go func(w *sync.WaitGroup, i int, note map[string]interface{}) {
-			note["free_text"] = cryptor(note["free_text"])
-			newLnoNotes[i] = note
-			w.Done()
-		}(&wg, i, note)
+		// go func(w *sync.WaitGroup, i int, note map[string]interface{}) {
+		note["free_text"] = cryptor(note["free_text"])
+		newLnoNotes[i] = note
+		// 	w.Done()
+		// }(&wg, i, note)
 	}
-	wg.Wait()
+	// wg.Wait()
 
 	patient["Car"] = newCarNotes
 	patient["Lno"] = newLnoNotes
@@ -203,6 +213,14 @@ func writePatient(patient map[string]interface{}, filepath string) (err error) {
 	newPatientData, _ := json.MarshalIndent(patient, "", "    ")
 	err = ioutil.WriteFile(filepath, newPatientData, 0660)
 	return
+}
+
+// MARK: stats
+
+func printStats(stats map[string]int) {
+	for w, c := range stats {
+		fmt.Printf("- %s: %d\n", color.YellowString(w), c)
+	}
 }
 
 //MARK: old main
