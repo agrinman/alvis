@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/agrinman/alvis/aesutil"
@@ -163,28 +164,27 @@ func ApplyCryptorToPatient(patient map[string]interface{}, cryptor func(interfac
 	lnoNotes, _ := patient["Lno"].([]interface{})
 	newLnoNotes := make([]map[string]interface{}, len(lnoNotes))
 
-	fmt.Println(len(cardiacNotes) + len(lnoNotes))
-	//	var wg sync.WaitGroup
-	//	wg.Add(len(cardiacNotes) + len(lnoNotes))
+	var wg sync.WaitGroup
+	wg.Add(len(cardiacNotes) + len(lnoNotes))
 
 	for i := range cardiacNotes {
 		note := cardiacNotes[i].(map[string]interface{})
-		//	go func(w *sync.WaitGroup, i int, note map[string]interface{}) {
-		note["free_text"] = cryptor(note["free_text"])
-		newCarNotes[i] = note
-		//		w.Done()
-		//	}(&wg, i, note)
+		go func(w *sync.WaitGroup, i int, note map[string]interface{}) {
+			note["free_text"] = cryptor(note["free_text"])
+			newCarNotes[i] = note
+			w.Done()
+		}(&wg, i, note)
 	}
 
 	for i := range lnoNotes {
 		note := lnoNotes[i].(map[string]interface{})
-		//	go func(w *sync.WaitGroup, i int, note map[string]interface{}) {
-		note["free_text"] = cryptor(note["free_text"])
-		newLnoNotes[i] = note
-		//		w.Done()
-		//	}(&wg, i, note)
+		go func(w *sync.WaitGroup, i int, note map[string]interface{}) {
+			note["free_text"] = cryptor(note["free_text"])
+			newLnoNotes[i] = note
+			w.Done()
+		}(&wg, i, note)
 	}
-	//wg.Wait()
+	wg.Wait()
 
 	patient["Car"] = newCarNotes
 	patient["Lno"] = newLnoNotes
