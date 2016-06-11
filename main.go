@@ -13,7 +13,6 @@ import (
 	"os"
 
 	"github.com/agrinman/alvis/freqFE"
-	"github.com/agrinman/alvis/ibe"
 	"github.com/agrinman/alvis/privKS"
 
 	"github.com/fatih/color"
@@ -28,11 +27,6 @@ import (
 type MasterKey struct {
 	KeywordKey   privKS.MasterKey
 	FrequencyKey freqFE.MasterKey
-}
-
-type KeyParams struct {
-	Key    ibe.PrivateKeySerialized   `json:"key"`
-	Params ibe.PublicParamsSerialized `json:"params"`
 }
 
 func parseMasterKey(filepath string) (msk MasterKey, err error) {
