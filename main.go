@@ -333,6 +333,60 @@ func decryptFreq(c *cli.Context) (err error) {
 	return
 }
 
+//MARK: old main
+func calcStats(c *cli.Context) (err error) {
+	if c.NumFlags() < 1 {
+		color.Red("Missing parameter: \n\t-patient-dir for path to patient files")
+		return
+	}
+
+	patientFiles, err := getFilePathsIn(c.String("patient-dir"))
+	if err != nil {
+		color.Red(err.Error())
+		return
+	}
+
+	totalCount := 0
+	for _, pf := range patientFiles {
+		var patient map[string]interface{}
+		patient, err = readPatientFile(pf)
+		if err != nil {
+			color.Red(err.Error())
+			continue
+		}
+
+		// car free text
+		cardiacNotes, _ := patient["Car"].([]interface{})
+		carNoteCount := 0
+
+		for i := range cardiacNotes {
+			note := cardiacNotes[i].(map[string]interface{})
+			carNoteCount += len(SplitFreeText(note["free_text"].(string)))
+		}
+
+		// lno free text
+		lnoNotes, _ := patient["Lno"].([]interface{})
+		lnoNoteCount := 0
+		for i := range lnoNotes {
+			note := lnoNotes[i].(map[string]interface{})
+			lnoNoteCount += len(SplitFreeText(note["free_text"].(string)))
+		}
+
+		color.Green("-- stats on %s --", pf)
+		fmt.Printf("- #Car words: %d\n", carNoteCount)
+		fmt.Printf("- #Lno words: %d\n", lnoNoteCount)
+		fmt.Printf("- Word Total: %d\n", carNoteCount+lnoNoteCount)
+
+		totalCount += carNoteCount + lnoNoteCount
+
+	}
+
+	color.Magenta("--- overall stats ---")
+	fmt.Printf("%d words for searchable encryption\n", totalCount)
+
+	return
+}
+
 //MARK: CLI
 func main() {
 	// set procs -1
@@ -418,6 +472,15 @@ func main() {
 			Flags: []cli.Flag{
 				cli.StringFlag{Name: "msk"},
 				cli.StringFlag{Name: "c"},
+			},
+		},
+		{
+			Name:    "stats",
+			Aliases: nil,
+			Usage:   "Calculate the number of words in patient files",
+			Action:  calcStats,
+			Flags: []cli.Flag{
+				cli.StringFlag{Name: "patient-dir"},
 			},
 		},
 	}

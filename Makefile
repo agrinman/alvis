@@ -23,8 +23,11 @@ clean:
 	rm -rf tmp/keys/
 	rm -rf tmp/enc_patients/
 
-
+stats:
+	go install
+	cd tmp/ && alvis stats -patient-dir patients/
+	
 install:
 	go install
 
-.PHONY: build test clean install
+.PHONY: build test clean install stats
