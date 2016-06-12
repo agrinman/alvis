@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"os"
 
+	"github.com/agrinman/alvis/base36"
 	"github.com/agrinman/alvis/freqFE"
 	"github.com/agrinman/alvis/privKS"
 
@@ -301,6 +302,37 @@ func decrypt(c *cli.Context) (err error) {
 	return
 }
 
+func decryptFreq(c *cli.Context) (err error) {
+	if c.NumFlags() < 2 {
+		color.Red("Missing one of: \n\t-msk for path to master secret key \n\t-c frequency cipher-text")
+		return
+	}
+
+	// read master secret file
+	mskPath := c.String("msk")
+	master, err := parseMasterKey(mskPath)
+	if err != nil {
+		color.Red(err.Error())
+		return
+	}
+
+	// get and mkdir out path
+	ctxt, err := base36.DecodeString(c.String("c"))
+	if err != nil {
+		color.Red(err.Error())
+		return
+	}
+
+	ptxt, err := freqFE.DecryptInner(master.FrequencyKey, ctxt)
+	if err != nil {
+		color.Red(err.Error())
+		return
+	}
+
+	fmt.Println(string(ptxt))
+	return
+}
+
 //MARK: CLI
 func main() {
 	// set procs -1
@@ -376,6 +408,16 @@ func main() {
 				cli.StringFlag{Name: "freq-key"},
 				cli.StringFlag{Name: "patient-dir"},
 				cli.StringFlag{Name: "out-dir"},
+			},
+		},
+		{
+			Name:    "decrypt-freq",
+			Aliases: nil,
+			Usage:   "Decrypt a frequency ciphertext",
+			Action:  decryptFreq,
+			Flags: []cli.Flag{
+				cli.StringFlag{Name: "msk"},
+				cli.StringFlag{Name: "c"},
 			},
 		},
 	}
