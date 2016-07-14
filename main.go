@@ -6,6 +6,7 @@ import (
 	"log"
 	"path"
 	"runtime"
+	"unicode"
 
 	"strings"
 
@@ -304,7 +305,7 @@ func decrypt(c *cli.Context) (err error) {
 
 func decryptFreq(c *cli.Context) (err error) {
 	if c.NumFlags() < 2 {
-		color.Red("Missing one of: \n\t-msk for path to master secret key \n\t-c frequency cipher-text")
+		color.Red("Missing one of: \n\t-msk for path to master secret key \n\t-c frequency cipher-text \n\t-file multiple frequency cipher-texts in a file")
 		return
 	}
 
@@ -316,6 +317,44 @@ func decryptFreq(c *cli.Context) (err error) {
 		return
 	}
 
+	// try if many
+	filePath := c.String("file")
+	if filePath != "" {
+		fileBytes, fileErr := ioutil.ReadFile(filePath)
+		if fileErr != nil {
+			err = fileErr
+			color.Red(err.Error())
+			return
+		}
+
+		fileCopy := string(fileBytes)
+
+		splitter := func(c rune) bool {
+			return !unicode.IsLetter(c) && !unicode.IsNumber(c)
+		}
+		tokens := strings.FieldsFunc(fileCopy, splitter)
+
+		for _, t := range tokens {
+			ctxt, decodeErr := base36.DecodeString(t)
+			if decodeErr != nil {
+				continue
+			}
+
+			ptxt, decryptErr := freqFE.DecryptInner(master.FrequencyKey, ctxt)
+			fmt.Println(ptxt)
+			if decryptErr != nil {
+				continue
+			}
+
+			fileCopy = strings.Replace(fileCopy, t, string(ptxt), -1)
+		}
+
+		fmt.Println(fileCopy)
+
+		return
+	}
+
+	// otherwise just decrypt one
 	// get and mkdir out path
 	ctxt, err := base36.DecodeString(c.String("c"))
 	if err != nil {
@@ -466,12 +505,13 @@ func main() {
 		},
 		{
 			Name:    "decrypt-freq",
-			Aliases: nil,
+			Aliases: []string{"df"},
 			Usage:   "Decrypt a frequency ciphertext",
 			Action:  decryptFreq,
 			Flags: []cli.Flag{
 				cli.StringFlag{Name: "msk"},
 				cli.StringFlag{Name: "c"},
+				cli.StringFlag{Name: "file"},
 			},
 		},
 		{
