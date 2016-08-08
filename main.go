@@ -345,7 +345,6 @@ func decryptFreq(c *cli.Context) (err error) {
 			}
 
 			ptxt, decryptErr := freqFE.DecryptInner(master.FrequencyKey, ctxt)
-			fmt.Println(ptxt)
 			if decryptErr != nil {
 				continue
 			}
