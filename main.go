@@ -120,8 +120,12 @@ func genKeywordKey(c *cli.Context) (err error) {
 		return
 	}
 
+	//always give keys to decode these \n,\r
+	wordTokens := strings.Split(string(words), "\n")
+
+	fmt.Println(wordTokens)
 	// create sk for all the words
-	for _, w := range strings.Split(string(words), "\n") {
+	for _, w := range wordTokens {
 		w = strings.TrimSpace(w)
 		if len(w) == 0 {
 			continue

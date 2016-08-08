@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"unicode"
@@ -16,6 +15,10 @@ import (
 	"github.com/agrinman/alvis/privKS"
 
 	"github.com/fatih/color"
+)
+
+var (
+	recordTypes = []string{"Car", "Lno", "Dis", "Mic", "Opn", "Pat", "Rad"}
 )
 
 //MARK: Encryption/Decryption
@@ -150,46 +153,39 @@ func SplitFreeText(text string) []string {
 
 	// split
 	splitter := func(c rune) bool {
-		return !unicode.IsLetter(c) && !unicode.IsNumber(c) && c != '_'
+		return !unicode.IsLetter(c) &&
+			!unicode.IsNumber(c) &&
+			c != '_' &&
+			c != '\'' &&
+			c != '"' &&
+			c != '%'
 	}
-	return strings.FieldsFunc(text, splitter)
+
+	return strings.FieldsFunc(filteredText, splitter)
 }
 
 // parse helper
 func ApplyCryptorToPatient(patient map[string]interface{}, cryptor func(interface{}) interface{}) map[string]interface{} {
 
-	// car free text
-	cardiacNotes, _ := patient["Car"].([]interface{})
-	newCarNotes := make([]map[string]interface{}, len(cardiacNotes))
-
-	// lno free text
-	lnoNotes, _ := patient["Lno"].([]interface{})
-	newLnoNotes := make([]map[string]interface{}, len(lnoNotes))
-
 	var wg sync.WaitGroup
-	wg.Add(len(cardiacNotes) + len(lnoNotes))
+	for _, record := range recordTypes {
+		notes, _ := patient[record].([]interface{})
+		newNote := make([]map[string]interface{}, len(notes))
 
-	for i := range cardiacNotes {
-		note := cardiacNotes[i].(map[string]interface{})
-		go func(w *sync.WaitGroup, i int, note map[string]interface{}) {
-			note["free_text"] = cryptor(note["free_text"])
-			newCarNotes[i] = note
-			w.Done()
-		}(&wg, i, note)
-	}
+		wg.Add(len(notes))
 
-	for i := range lnoNotes {
-		note := lnoNotes[i].(map[string]interface{})
-		go func(w *sync.WaitGroup, i int, note map[string]interface{}) {
-			note["free_text"] = cryptor(note["free_text"])
-			newLnoNotes[i] = note
-			w.Done()
-		}(&wg, i, note)
+		for i := range notes {
+			note := notes[i].(map[string]interface{})
+			go func(w *sync.WaitGroup, i int, note map[string]interface{}) {
+				note["free_text"] = cryptor(note["free_text"])
+				newNote[i] = note
+				w.Done()
+			}(&wg, i, note)
+		}
+
+		patient[record] = newNote
 	}
 	wg.Wait()
-
-	patient["Car"] = newCarNotes
-	patient["Lno"] = newLnoNotes
 
 	return patient
 }
@@ -217,7 +213,7 @@ func printStats(stats map[string]int) {
 
 //MARK: old main
 func oldmain() {
-	patient, _ := readPatientFile("patients/test.json")
+	patient, _ := readPatientFile("tmp/patients/patient_1.json")
 
 	// car free text
 	cardiacNotes, _ := patient["Car"].([]interface{})
@@ -227,10 +223,11 @@ func oldmain() {
 		note := cardiacNotes[i].(map[string]interface{})
 
 		toks := SplitFreeText(note["free_text"].(string))
-		for _, t := range toks {
-			if _, err := strconv.Atoi(t); err == nil {
-				continue
-			}
+		if i == 0 {
+			l, _ := json.Marshal(toks)
+			fmt.Println(string(l))
+		}
+		for _ = range toks {
 			wordCount += 1
 		}
 	}
@@ -241,13 +238,10 @@ func oldmain() {
 	for i := range lnoNotes {
 		note := lnoNotes[i].(map[string]interface{})
 		toks := SplitFreeText(note["free_text"].(string))
-		for _, t := range toks {
-			if _, err := strconv.Atoi(t); err == nil {
-				continue
-			}
+		for _ = range toks {
 			wordCount += 1
 		}
 	}
 
-	fmt.Println("number of tokens (ints excluded) in a patient file: ", wordCount)
+	fmt.Println("number of tokens in a patient file: ", wordCount)
 }

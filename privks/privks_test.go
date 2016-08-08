@@ -26,3 +26,24 @@ func BenchmarkKeywordDecrypt(b *testing.B) {
 	}
 
 }
+
+func TestNewLineCarriageReturn(t *testing.T) {
+
+	master, _ := GenMasterKey()
+	c, _ := master.EncryptKeyword("\n")
+	sk := master.Extract("\n")
+
+	if !sk.DecryptAndCheck(c) {
+		t.Error("Error: mismatch newline")
+		return
+	}
+
+	c, _ = master.EncryptKeyword("\r")
+	sk = master.Extract("\r")
+
+	if !sk.DecryptAndCheck(c) {
+		t.Error("Error: mismatch carriage return")
+		return
+	}
+
+}
