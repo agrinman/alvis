@@ -1,25 +1,25 @@
-package freqFE
+package pfs
 
 import "testing"
 import "bytes"
 
-func TestFrequencyFE(t *testing.T) {
-	master, err := GenFrequencyFE()
+func TestPFS(t *testing.T) {
+	master, err := Setup()
 	if err != nil {
 		t.Error(err)
 	}
 	message := []byte("hello world")
-	ctxt, err := EncryptInnerOuter(master, message)
+	ctxt, err := Disguise(master, message)
 	if err != nil {
 		t.Error(err)
 	}
 
-	innerCtxt, err := DecryptOuter(master.OuterKey, ctxt)
+	_, err = RecognizeCiphertext(master.OuterKey, ctxt)
 	if err != nil {
 		t.Error(err)
 	}
 
-	out, err := DecryptInner(master, innerCtxt)
+	out, err := UncoverCiphertext(master, ctxt)
 	if err != nil {
 		t.Error(err)
 	}

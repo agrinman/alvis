@@ -1,4 +1,4 @@
-package privKS
+package pks
 
 import (
 	"os"
@@ -10,14 +10,14 @@ func TestMain(m *testing.M) {
 }
 
 func BenchmarkKeywordDecrypt(b *testing.B) {
-	master, _ := GenMasterKey()
-	c, _ := master.EncryptKeyword("ullamcorper")
+	master, _ := Setup()
+	c, _ := master.Hide("ullamcorper")
 	sk := master.Extract("ullamcorper")
 
 	b.ResetTimer()
 	v := true
 	for n := 0; n < b.N; n++ {
-		v = v && sk.DecryptAndCheck(c)
+		v = v && sk.Check(c)
 	}
 
 	if !v {
@@ -29,19 +29,19 @@ func BenchmarkKeywordDecrypt(b *testing.B) {
 
 func TestNewLineCarriageReturn(t *testing.T) {
 
-	master, _ := GenMasterKey()
-	c, _ := master.EncryptKeyword("\n")
+	master, _ := Setup()
+	c, _ := master.Hide("\n")
 	sk := master.Extract("\n")
 
-	if !sk.DecryptAndCheck(c) {
+	if !sk.Check(c) {
 		t.Error("Error: mismatch newline")
 		return
 	}
 
-	c, _ = master.EncryptKeyword("\r")
+	c, _ = master.Hide("\r")
 	sk = master.Extract("\r")
 
-	if !sk.DecryptAndCheck(c) {
+	if !sk.Check(c) {
 		t.Error("Error: mismatch carriage return")
 		return
 	}

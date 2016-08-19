@@ -14,8 +14,8 @@ import (
 	"os"
 
 	"github.com/agrinman/alvis/base36"
-	"github.com/agrinman/alvis/freqFE"
-	"github.com/agrinman/alvis/privKS"
+	"github.com/agrinman/alvis/pfs"
+	"github.com/agrinman/alvis/pks"
 
 	"github.com/fatih/color"
 	"github.com/urfave/cli"
@@ -27,8 +27,8 @@ import (
 //MARK: Key types and parsing
 
 type MasterKey struct {
-	KeywordKey   privKS.MasterKey
-	FrequencyKey freqFE.MasterKey
+	KeywordKey   pks.MasterKey
+	FrequencyKey pfs.MasterKey
 }
 
 func parseMasterKey(filepath string) (msk MasterKey, err error) {
@@ -46,7 +46,7 @@ func parseMasterKey(filepath string) (msk MasterKey, err error) {
 	return
 }
 
-func parsePrivateKey(filepath string) (privateKey privKS.PrivateKey, err error) {
+func parsePrivateKey(filepath string) (privateKey pks.PrivateKey, err error) {
 	kpBytes, err := ioutil.ReadFile(filepath)
 	if err != nil {
 		return
@@ -67,14 +67,14 @@ func genMaster(c *cli.Context) (err error) {
 	outPath := c.String("out")
 
 	// setup frequency key
-	freqMaster, err := freqFE.GenMasterKey()
+	freqMaster, err := pfs.Setup()
 	if err != nil {
 		color.Red(err.Error())
 		return
 	}
 
 	// setup ibe key
-	keyMaster, err := privKS.GenMasterKey()
+	keyMaster, err := pks.Setup()
 	if err != nil {
 		color.Red(err.Error())
 		return
@@ -176,7 +176,7 @@ func genFrequencyKey(c *cli.Context) (err error) {
 
 func encrypt(c *cli.Context) (err error) {
 	if c.NumFlags() < 3 {
-		color.Red("Missing one of: \n\t-msk for path to master secret key \n\t-patient-dir for directory of patient files \n\t-out-dir for the directory of the encrypted patient files")
+		color.Red("Missing one of: \n\t-msk for path to master secret key \n\t-data-dir for directory of patient files \n\t-out-dir for the directory of the encrypted patient files")
 		return
 	}
 
@@ -193,7 +193,7 @@ func encrypt(c *cli.Context) (err error) {
 	os.MkdirAll(outPath, 0777)
 
 	// read patient files
-	patientDirPath := c.String("patient-dir")
+	patientDirPath := c.String("data-dir")
 
 	file, _ := os.Open(patientDirPath)
 	fi, err := file.Stat()
@@ -218,7 +218,7 @@ func encrypt(c *cli.Context) (err error) {
 		}
 
 	case mode.IsRegular():
-		color.Red("'-patient-dir' was given a file. expected a directory.")
+		color.Red("'-data-dir' was given a file. expected a directory.")
 		break
 	}
 
@@ -227,7 +227,7 @@ func encrypt(c *cli.Context) (err error) {
 
 func decrypt(c *cli.Context) (err error) {
 	if c.NumFlags() < 4 {
-		color.Red("Missing one or more args: \n\t-key-dir for directory path to functional keys \n\t-freq-key for path to the frequency decryption key file \n\t-patient-dir for directory of patient files \n\t-out-dir for the where to write the partially-decrypted patient files")
+		color.Red("Missing one or more args: \n\t-key-dir for directory path to functional keys \n\t-freq-key for path to the frequency decryption key file \n\t-data-dir for directory of data files \n\t-out-dir for the where to write the partially-decrypted patient files")
 		return
 	}
 
@@ -249,7 +249,7 @@ func decrypt(c *cli.Context) (err error) {
 		return
 	}
 
-	var keywordKeys []privKS.PrivateKey
+	var keywordKeys []pks.PrivateKey
 
 	switch mode := fi.Mode(); {
 	case mode.IsDir():
@@ -276,7 +276,7 @@ func decrypt(c *cli.Context) (err error) {
 	os.MkdirAll(outPath, 0777)
 
 	// read patient files
-	patientDirPath := c.String("patient-dir")
+	patientDirPath := c.String("data-dir")
 
 	file, _ = os.Open(patientDirPath)
 	fi, err = file.Stat()
@@ -300,7 +300,7 @@ func decrypt(c *cli.Context) (err error) {
 			}
 		}
 	case mode.IsRegular():
-		color.Red("'-patient-dir' was given a file. expected a directory.")
+		color.Red("'-data-dir' was given a file. expected a directory.")
 		break
 	}
 
@@ -344,7 +344,7 @@ func decryptFreq(c *cli.Context) (err error) {
 				continue
 			}
 
-			ptxt, decryptErr := freqFE.DecryptInner(master.FrequencyKey, ctxt)
+			ptxt, decryptErr := pfs.Uncover(master.FrequencyKey, ctxt)
 			if decryptErr != nil {
 				continue
 			}
@@ -365,7 +365,7 @@ func decryptFreq(c *cli.Context) (err error) {
 		return
 	}
 
-	ptxt, err := freqFE.DecryptInner(master.FrequencyKey, ctxt)
+	ptxt, err := pfs.Uncover(master.FrequencyKey, ctxt)
 	if err != nil {
 		color.Red(err.Error())
 		return
@@ -378,11 +378,11 @@ func decryptFreq(c *cli.Context) (err error) {
 //MARK: old main
 func calcStats(c *cli.Context) (err error) {
 	if c.NumFlags() < 1 {
-		color.Red("Missing parameter: \n\t-patient-dir for path to patient files")
+		color.Red("Missing parameter: \n\t-data-dir for path to data files")
 		return
 	}
 
-	patientFiles, err := getFilePathsIn(c.String("patient-dir"))
+	patientFiles, err := getFilePathsIn(c.String("data-dir"))
 	if err != nil {
 		color.Red(err.Error())
 		return
@@ -443,28 +443,28 @@ func main() {
 	app := cli.NewApp()
 
 	app.Name = color.GreenString("Alvis")
-	app.Usage = color.GreenString("A command line utility to encrypt and partially-decrypt patient files for searching on encrypted data")
+	app.Usage = color.GreenString("A command line interface for Private-key {Keyword,Frequency} Search")
 	app.EnableBashCompletion = true
 	app.Version = "0.1"
 
 	app.Commands = []cli.Command{
 		{
-			Name:    "gen-msk",
+			Name:    "setup",
 			Aliases: nil,
-			Usage:   "Generate master private key",
+			Usage:   "Generate the master key",
 			Action:  genMaster,
 			Flags: []cli.Flag{
 				cli.StringFlag{Name: "out"},
 			},
 		},
 		{
-			Name:    "gen-sk",
+			Name:    "extract",
 			Aliases: nil,
-			Usage:   "Generate a secret, functional decryption key for: keyword or frequency",
+			Usage:   "Extract a secret key for keyword,frequency search",
 			Subcommands: []cli.Command{
 				{
 					Name:   "keyword",
-					Usage:  "search keyword functional key",
+					Usage:  "search key for keyword search",
 					Action: genKeywordKey,
 					Flags: []cli.Flag{
 						cli.StringFlag{Name: "words"},
@@ -474,7 +474,7 @@ func main() {
 				},
 				{
 					Name:   "frequency",
-					Usage:  "functional key for computing frequency count",
+					Usage:  "search key for frequency search",
 					Action: genFrequencyKey,
 					Flags: []cli.Flag{
 						cli.StringFlag{Name: "msk"},
@@ -486,31 +486,30 @@ func main() {
 		{
 			Name:    "encrypt",
 			Aliases: nil,
-			Usage:   "Encrypt patient files",
+			Usage:   "hide and disguise free text in data files",
 			Action:  encrypt,
 			Flags: []cli.Flag{
 				cli.StringFlag{Name: "msk"},
-				cli.StringFlag{Name: "patient-dir"},
+				cli.StringFlag{Name: "data-dir"},
 				cli.StringFlag{Name: "out-dir"},
 			},
 		},
 		{
 			Name:    "decrypt",
 			Aliases: nil,
-			Usage:   "Decrypt patient files",
+			Usage:   "check data files for keywords and recognize repeated plaintexts",
 			Action:  decrypt,
 			Flags: []cli.Flag{
 				cli.StringFlag{Name: "key-dir"},
 				cli.StringFlag{Name: "freq-key"},
-				cli.StringFlag{Name: "patient-dir"},
+				cli.StringFlag{Name: "data-dir"},
 				cli.StringFlag{Name: "out-dir"},
 			},
 		},
 		{
-			Name:    "decrypt-freq",
-			Aliases: []string{"df"},
-			Usage:   "Decrypt a frequency ciphertext",
-			Action:  decryptFreq,
+			Name:   "uncover",
+			Usage:  "Uncover a frequency ciphertext",
+			Action: decryptFreq,
 			Flags: []cli.Flag{
 				cli.StringFlag{Name: "msk"},
 				cli.StringFlag{Name: "c"},
@@ -520,7 +519,7 @@ func main() {
 		{
 			Name:    "stats",
 			Aliases: nil,
-			Usage:   "Calculate the number of words in patient files",
+			Usage:   "Number of free text words in data files",
 			Action:  calcStats,
 			Flags: []cli.Flag{
 				cli.StringFlag{Name: "patient-dir"},

@@ -9,10 +9,9 @@ import (
 	"sync"
 	"unicode"
 
-	"github.com/agrinman/alvis/aesutil"
 	"github.com/agrinman/alvis/base36"
-	"github.com/agrinman/alvis/freqFE"
-	"github.com/agrinman/alvis/privKS"
+	"github.com/agrinman/alvis/pfs"
+	"github.com/agrinman/alvis/pks"
 
 	"github.com/fatih/color"
 )
@@ -31,7 +30,7 @@ func EncryptAndSavePatientFile(inpath string, outpath string, master MasterKey) 
 
 		encryptedKeywordFETokens := make([]string, numTokens)
 		for i, t := range tokens {
-			ctxtBytes, errEnc := master.KeywordKey.EncryptKeyword(t)
+			ctxtBytes, errEnc := master.KeywordKey.Hide(t)
 			if errEnc != nil {
 				color.Red("Found error while encrypting/serializing keyword: ", errEnc)
 			}
@@ -47,12 +46,12 @@ func EncryptAndSavePatientFile(inpath string, outpath string, master MasterKey) 
 		encryptedFreqFETokens := make([]string, len(tokens))
 
 		for i := range tokens {
-			res, resErr := freqFE.EncryptInnerOuter(master.FrequencyKey, []byte(tokens[i]))
+			res, resErr := pfs.Disguise(master.FrequencyKey, []byte(tokens[i]))
 			if resErr != nil {
 				return resErr
 			}
 			var errEncode error
-			encryptedFreqFETokens[i], errEncode = base36.Encode(res)
+			encryptedFreqFETokens[i], errEncode = base36.Encode(res.Hidden)
 			if errEncode != nil {
 				color.Red("Found error while encoding keyword: ", errEncode)
 			}
@@ -70,7 +69,7 @@ func EncryptAndSavePatientFile(inpath string, outpath string, master MasterKey) 
 	return
 }
 
-func DecryptAndSavePatientFile(inpath string, outpath string, keywordKeys []privKS.PrivateKey, freqOuter []byte) (err error) {
+func DecryptAndSavePatientFile(inpath string, outpath string, keywordKeys []pks.PrivateKey, freqOuter []byte) (err error) {
 
 	patient, err := readPatientFile(inpath)
 
@@ -102,7 +101,7 @@ func DecryptAndSavePatientFile(inpath string, outpath string, keywordKeys []priv
 				continue
 			}
 
-			decryptedToken, errDecr := aesutil.AESDecrypt(freqOuter, tbytes)
+			decryptedToken, errDecr := pfs.Recognize(freqOuter, tbytes)
 			if errDecr != nil {
 				color.Red("Cannot decrypt bytes: %d", tbytes)
 				continue
@@ -123,7 +122,7 @@ func DecryptAndSavePatientFile(inpath string, outpath string, keywordKeys []priv
 				color.Red("Cannot decode cipher text: %s. Error: ", ctxt, errDecode)
 			}
 			for _, sk := range keywordKeys {
-				if sk.DecryptAndCheck(ctxt) {
+				if sk.Check(ctxt) {
 					statsMutex.Lock()
 					stats[sk.Keyword] += 1
 					statsMutex.Unlock()

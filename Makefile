@@ -5,15 +5,15 @@ build:
 test: clean
 	go install
 
-	alvis gen-msk -out tmp/master.priv
+	alvis setup -out tmp/master.priv
 
-	cd tmp/ && time alvis encrypt -msk master.priv -patient-dir patients/ -out-dir enc_patients
+	cd tmp/ && time alvis encrypt -msk master.priv -data-dir patients/ -out-dir enc_patients
 
-	cd tmp/ && alvis gen-sk keyword -msk master.priv -words words.txt -out-dir keys
+	cd tmp/ && alvis extract keyword -msk master.priv -words words.txt -out-dir keys
 
-	cd tmp/ && alvis gen-sk frequency -msk master.priv -out freq.sk
+	cd tmp/ && alvis extract frequency -msk master.priv -out freq.sk
 
-	cd tmp/ && time alvis decrypt -key-dir keys/ -freq-key freq.sk -patient-dir enc_patients/ -out-dir dec_patients
+	cd tmp/ && time alvis decrypt -key-dir keys/ -freq-key freq.sk -data-dir enc_patients/ -out-dir dec_patients
 
 clean:
 	rm -f alvis
@@ -25,8 +25,8 @@ clean:
 
 stats:
 	go install
-	cd tmp/ && alvis stats -patient-dir patients/
-	
+	cd tmp/ && alvis stats -data-dir patients/
+
 install:
 	go install
 

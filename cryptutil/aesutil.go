@@ -1,11 +1,10 @@
-package aesutil
+package cryptutil
 
 import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"log"
@@ -120,11 +119,4 @@ func UnPKCS7Padding(data []byte) (result []byte, err error) {
 	result = data[:(length - unpadding)]
 
 	return
-}
-
-//MARK: SHA Helpers
-func SHA2(data string) []byte {
-	h := sha256.New()
-	h.Write([]byte(data))
-	return h.Sum(nil)
 }
