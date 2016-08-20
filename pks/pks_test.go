@@ -5,25 +5,61 @@ import (
 	"testing"
 )
 
+var longWord = "supercalifragilisticexpialidocious"
+
 func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func BenchmarkKeywordDecrypt(b *testing.B) {
+func BenchmarkSetup(b *testing.B) {
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			Setup()
+		}
+	})
+}
+
+func BenchmarkExtract(b *testing.B) {
 	master, _ := Setup()
-	c, _ := master.Hide("ullamcorper")
-	sk := master.Extract("ullamcorper")
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			master.Extract(longWord)
+		}
+	})
+}
+
+func BenchmarkHide(b *testing.B) {
+	master, _ := Setup()
 
 	b.ResetTimer()
-	v := true
-	for n := 0; n < b.N; n++ {
-		v = v && sk.Check(c)
-	}
 
-	if !v {
-		b.Errorf("failed decrypt")
-		return
-	}
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			master.Hide(longWord)
+		}
+	})
+}
+
+func BenchmarkCheck(b *testing.B) {
+	master, _ := Setup()
+	c, _ := master.Hide(longWord)
+	sk := master.Extract(longWord)
+
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+
+		v := true
+		for pb.Next() {
+			v = v && sk.Check(c)
+		}
+
+		if !v {
+			b.Errorf("failed decrypt")
+			return
+		}
+	})
 
 }
 
