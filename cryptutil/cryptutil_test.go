@@ -2,7 +2,7 @@ package cryptutil
 
 import "testing"
 
-var longWord = "supercalifragilisticexpialidocious"
+var oneBlock = []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 
 func BenchmarkRandKey(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
@@ -14,7 +14,7 @@ func BenchmarkRandKey(b *testing.B) {
 
 func BenchmarkAESEncrypt(b *testing.B) {
 	k, _ := RandKey()
-	msg := []byte(longWord)
+	msg := oneBlock
 	b.ResetTimer()
 
 	b.RunParallel(func(pb *testing.PB) {
@@ -26,7 +26,7 @@ func BenchmarkAESEncrypt(b *testing.B) {
 
 func BenchmarkAESDecrypt(b *testing.B) {
 	k, _ := RandKey()
-	msg := []byte(longWord)
+	msg := oneBlock
 	c, _ := AESEncrypt(k, msg)
 
 	b.ResetTimer()
@@ -39,7 +39,7 @@ func BenchmarkAESDecrypt(b *testing.B) {
 }
 
 func BenchmarkHashAB(b *testing.B) {
-	msg := []byte(longWord)
+	msg := oneBlock
 	k, _ := RandKey()
 	b.ResetTimer()
 
