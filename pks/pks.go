@@ -3,7 +3,7 @@ package pks
 import "github.com/agrinman/alvis/cryptutil"
 
 type MasterKey struct {
-	Salt []byte
+	Key []byte
 }
 
 type PrivateKey struct {
@@ -16,13 +16,13 @@ var OneVec = []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
 //MARK: Private Encryption Keyword Search Methods
 
 func Setup() (msk MasterKey, err error) {
-	msk.Salt, err = cryptutil.RandKey()
+	msk.Key, err = cryptutil.RandKey()
 	return
 }
 
 // Encrypt encrpyts to an id a message m
 func (msk MasterKey) Extract(id string) (sk PrivateKey) {
-	return PrivateKey{id, cryptutil.H([]byte(id), msk.Salt)}
+	return PrivateKey{id, cryptutil.H([]byte(id), msk.Key)}
 }
 
 func (msk MasterKey) Hide(id string) (res []byte, err error) {
