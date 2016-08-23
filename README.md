@@ -7,9 +7,9 @@ To get dependicies, run `manul -I` (manul is a go dep helper: `go get github/kov
 
 *cryptutil*
 BenchmarkRandKey-2   	  500000	      3421 ns/op
-BenchmarkAESEncrypt-2	  500000	      3583 ns/op
-BenchmarkAESDecrypt-2	 1000000	      1352 ns/op
-BenchmarkHashAB-2    	  500000	      3026 ns/op
+BenchmarkAESEncrypt-2	  500000	      3531 ns/op
+BenchmarkAESDecrypt-2	 1000000	      1225 ns/op
+BenchmarkHashAB-2    	  500000	      3048 ns/op
 
 *pks*
 BenchmarkSetup-2  	  500000	      3427 ns/op

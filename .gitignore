@@ -8,3 +8,4 @@ main
 *.sk
 encrypted/
 tmp/
+data
